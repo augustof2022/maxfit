@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { EXERCISE_BY_ID, EQUIPMENT } from '../core/exercises';
+import { EXERCISE_BY_ID } from '../core/exercises';
+import { equipmentName } from '../core/equipment';
+import { PlaceEditor } from '../components/PlaceEditor';
 import { cardioTotals, fmtClock, inMode, totals, activeSeconds } from '../core/live';
 import { fmtPace, nextTarget, starterPlan, type ExRecord } from '../core/rules';
 import type { Exercise, LiveMode, Session, WorkSet } from '../core/types';
@@ -20,6 +22,7 @@ export function Train(props: Props) {
 }
 
 function LocationPicker({ game, value, onPick }: { game: Game; value: string | null; onPick: (id: string) => void }) {
+  const [adding, setAdding] = useState(false);
   return (
     <div className="row wrap" role="radiogroup" aria-label="Where are you training?">
       {game.locations.map((l) => (
@@ -27,6 +30,21 @@ function LocationPicker({ game, value, onPick }: { game: Game; value: string | n
           {l.kind === 'home' ? '🏠' : l.kind === 'gym' ? '🏋️' : l.kind === 'outdoor' ? '🌳' : '📍'} {l.name}
         </button>
       ))}
+      <button className="chip" onClick={() => setAdding(true)}>
+        + New place
+      </button>
+      {adding && (
+        <PlaceEditor
+          loc={{ name: '', kind: 'gym', equipment: [] }}
+          customEquipment={game.customEquipment}
+          unlocked={game.profile!.unlocked}
+          canDelete={false}
+          onClose={(id) => {
+            setAdding(false);
+            if (id) onPick(id);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -36,7 +54,7 @@ function PreSession({ game }: Props) {
   const [busy, setBusy] = useState(false);
   const loc = d.location;
   const plan = starterPlan(d.available, d.stats.sessions);
-  const eqNames = (loc?.equipment ?? []).map((id) => EQUIPMENT.find((e) => e.id === id)?.name).filter(Boolean);
+  const eqNames = (loc?.equipment ?? []).map((id) => equipmentName(id, game.customEquipment));
 
   const start = async () => {
     if (busy) return;
@@ -56,7 +74,7 @@ function PreSession({ game }: Props) {
       <section className="card stack">
         <h2>Where are you today?</h2>
         <LocationPicker game={game} value={loc?.id ?? null} onPick={(id) => updateProfile({ lastLocationId: id })} />
-        <p className="small muted">Equipment: {eqNames.length ? eqNames.join(', ') : 'none (bodyweight only)'}. Edit in Settings.</p>
+        <p className="small muted">Equipment: {eqNames.length ? eqNames.join(', ') : 'none (bodyweight only)'}. Edit in Settings → My places.</p>
       </section>
 
       {plan.length > 0 && (

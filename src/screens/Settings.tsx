@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Sheet, Stepper } from '../components/ui';
-import { EQUIPMENT } from '../core/exercises';
-import type { EquipmentId, Location } from '../core/types';
-import { deleteLocation, exportAll, importAll, saveLocation, updateProfile, updateSettings, wipeLocal } from '../data/repo';
+import { Stepper } from '../components/ui';
+import { PlaceEditor } from '../components/PlaceEditor';
+import { CATEGORIES, EQUIPMENT, equipmentName } from '../core/equipment';
+import type { Location } from '../core/types';
+import { deleteEquipment, exportAll, importAll, updateProfile, updateSettings, wipeLocal } from '../data/repo';
 import type { Game } from '../data/useGame';
 import { alarm, primeAudio } from '../lib/alarm';
 import { askPermission, isNative } from '../lib/notify';
@@ -29,22 +30,55 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
       <section className="card stack" aria-label="Locations">
         <div className="row between">
-          <h2>Locations & equipment</h2>
-          <button className="btn ghost" onClick={() => setEditing({ name: '', kind: 'other', equipment: [] })}>
-            + Add
+          <h2>My places</h2>
+          <button className="btn ghost" onClick={() => setEditing({ name: '', kind: 'gym', equipment: [] })}>
+            + New place
           </button>
         </div>
-        <p className="small muted">Save each place once. When you pick it, MaxFit shows only exercises you can do there.</p>
-        {game.locations.map((l) => (
-          <button key={l.id} className="card flat row between" style={{ textAlign: 'left' }} onClick={() => setEditing(l)}>
-            <span>
-              <b>{l.name}</b>
-              <br />
-              <span className="small muted">{l.equipment.length ? `${l.equipment.length} items` : 'Bodyweight only'}</span>
-            </span>
-            <span className="muted">Edit ›</span>
-          </button>
-        ))}
+        <p className="small muted">Name a place and pick its equipment once. When you train there, MaxFit loads it and shows only exercises you can do.</p>
+        {game.locations.map((l) => {
+          const names = l.equipment.map((id) => equipmentName(id, game.customEquipment));
+          return (
+            <button key={l.id} className="card flat row between" style={{ textAlign: 'left' }} onClick={() => setEditing(l)}>
+              <span className="grow">
+                <b>{l.name}</b>
+                <br />
+                <span className="small muted">{names.length ? `${names.length} items: ${names.slice(0, 4).join(', ')}${names.length > 4 ? '…' : ''}` : 'Bodyweight only'}</span>
+              </span>
+              <span className="muted">Edit ›</span>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="card stack" aria-label="Equipment library">
+        <h2>Equipment library</h2>
+        <p className="small muted">
+          {EQUIPMENT.length} built-in items in {CATEGORIES.length} groups. Add your own from any place's editor.
+        </p>
+        {game.customEquipment.filter((e) => !e.deleted).length === 0 ? (
+          <p className="small muted">No items of your own yet.</p>
+        ) : (
+          game.customEquipment
+            .filter((e) => !e.deleted)
+            .map((e) => (
+              <div key={e.id} className="row between small">
+                <span>
+                  ★ {e.name} <span className="muted">· {CATEGORIES.find((c) => c.id === e.category)?.name}</span>
+                </span>
+                <button
+                  className="btn ghost"
+                  style={{ minHeight: 32, padding: '4px 10px' }}
+                  aria-label={`Remove ${e.name} from library`}
+                  onClick={async () => {
+                    if (confirm(`Remove "${e.name}" from your library? Places that have it will no longer list it.`)) await deleteEquipment(e.id);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))
+        )}
       </section>
 
       <section className="card stack" aria-label="Rest alarm">
@@ -175,7 +209,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         MaxFit v0.1 · Train like a game
       </p>
 
-      {editing && <LocationEditor loc={editing} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
+      {editing && <PlaceEditor loc={editing} customEquipment={game.customEquipment} unlocked={p.unlocked} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
     </div>
   );
 }
@@ -186,65 +220,6 @@ function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boole
       <span>{label}</span>
       <input type="checkbox" role="switch" checked={on} onChange={(e) => set(e.target.checked)} style={{ width: 24, height: 24, accentColor: 'var(--accent)' }} />
     </label>
-  );
-}
-
-function LocationEditor({ loc, onClose, canDelete }: { loc: Partial<Location>; onClose: () => void; canDelete: boolean }) {
-  const [name, setName] = useState(loc.name ?? '');
-  const [kind, setKind] = useState<Location['kind']>(loc.kind ?? 'other');
-  const [eq, setEq] = useState<EquipmentId[]>(loc.equipment ?? []);
-  const toggle = (id: EquipmentId) => setEq(eq.includes(id) ? eq.filter((x) => x !== id) : [...eq, id]);
-
-  return (
-    <Sheet onClose={onClose}>
-      <h2>{loc.id ? 'Edit location' : 'New location'}</h2>
-      <label className="field">
-        Name
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Office gym" />
-      </label>
-      <div className="row wrap">
-        {(['home', 'gym', 'outdoor', 'other'] as const).map((k) => (
-          <button key={k} className={`chip ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-            {k}
-          </button>
-        ))}
-      </div>
-      <h3>Equipment here</h3>
-      <div className="stack" style={{ gap: 4 }}>
-        {EQUIPMENT.map((e) => (
-          <label key={e.id} className="row between" style={{ minHeight: 40 }}>
-            <span>{e.name}</span>
-            <input type="checkbox" checked={eq.includes(e.id)} onChange={() => toggle(e.id)} style={{ width: 22, height: 22, accentColor: 'var(--accent)' }} />
-          </label>
-        ))}
-      </div>
-      <div className="row">
-        {loc.id && canDelete && (
-          <button
-            className="btn danger"
-            onClick={async () => {
-              await deleteLocation(loc.id!);
-              onClose();
-            }}
-          >
-            Delete
-          </button>
-        )}
-        <button className="btn ghost grow" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          className="btn primary grow"
-          disabled={!name.trim()}
-          onClick={async () => {
-            await saveLocation({ id: loc.id, name: name.trim(), kind, equipment: eq });
-            onClose();
-          }}
-        >
-          Save
-        </button>
-      </div>
-    </Sheet>
   );
 }
 

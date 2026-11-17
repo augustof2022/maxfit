@@ -32,6 +32,7 @@
 | `sessions` | startedAt, endedAt, status, activeSec, restSec, xpEarned, prs, live (timer state) |
 | `sets` | sessionId, exerciseId, reps / seconds / weightKg / distanceKm, durationSec, run/walk/restSec, isPR |
 | `weights` | date (one per day), kg |
+| `equipment` | the user's own library items: name, category (built-in items live in `src/core/equipment.ts`) |
 
 Every row has `updatedAt`; deletes are soft (`deleted: true`) so they sync.
 

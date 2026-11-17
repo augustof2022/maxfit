@@ -147,6 +147,27 @@ try {
   const homeHasCurl = (await page.getByText('Dumbbell curl').count()) > 0;
   check('Saved locations load equipment (curl at Gym, not at Home)', gymHasCurl && !homeHasCurl, `gym=${gymHasCurl} home=${homeHasCurl}`);
 
+  // New place: type a name, pick equipment from the library, add a custom item.
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: '+ New place' }).click();
+  await page.getByPlaceholder(/Office gym/).fill('Office gym');
+  await page.getByRole('button', { name: 'Dumbbells' }).click();
+  await page.getByRole('searchbox', { name: 'Search equipment' }).fill('hip abductor');
+  check('Search shows "not in the library yet"', await page.getByText('is not in the library yet').isVisible());
+  await page.getByRole('button', { name: /\+ Add new equipment/ }).click();
+  await page.getByRole('button', { name: 'Add + select' }).click();
+  await page.waitForTimeout(300);
+  check('Custom equipment added and selected', await page.getByRole('button', { name: /✓ hip abductor ★/ }).isVisible());
+  await shot('12-place-editor');
+  await page.getByRole('button', { name: 'Save place' }).click();
+  await page.waitForTimeout(300);
+  check('New place listed with its equipment', await page.getByText('Office gym').isVisible() && (await page.getByText(/2 items: Dumbbells, hip abductor/).count()) > 0);
+  await page.getByRole('button', { name: 'Train' }).click();
+  await page.getByRole('radio', { name: /Office gym/ }).click();
+  await page.waitForTimeout(300);
+  check('Training at the new place loads its equipment', (await page.getByText('Dumbbell curl').count()) > 0);
+  await shot('13-train-new-place');
+
   // Reload keeps data (local database)
   await page.reload();
   await page.getByRole('button', { name: 'Progress' }).click();

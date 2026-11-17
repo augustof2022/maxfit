@@ -1,7 +1,8 @@
 // All writes go through here, so every row gets updatedAt (needed for sync)
 // and the game rules run in one place when a session ends.
 
-import { EQUIPMENT, EXERCISE_BY_ID, STARTER_IDS } from '../core/exercises';
+import { EXERCISE_BY_ID, STARTER_IDS } from '../core/exercises';
+import { EQUIPMENT } from '../core/equipment';
 import { activeSeconds, newLive, switchMode, totals } from '../core/live';
 import {
   availableExercises,
@@ -20,7 +21,7 @@ import {
   XP,
   type ChestReward,
 } from '../core/rules';
-import type { EquipmentId, LiveMode, Location, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
+import type { EquipmentCategory, EquipmentId, LiveMode, Location, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
 import { db, uid } from './db';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -86,6 +87,24 @@ export async function saveLocation(loc: Omit<Location, "updatedAt" | "id"> & { i
 
 export async function deleteLocation(id: string): Promise<void> {
   await db.locations.update(id, { deleted: true, updatedAt: Date.now() });
+}
+
+/** Add an item to the user's own equipment library. Returns its id. */
+export async function addEquipment(name: string, category: EquipmentCategory): Promise<string> {
+  const clean = name.trim().slice(0, 40);
+  if (!clean) throw new Error('Give the equipment a name.');
+  const all = await db.equipment.toArray();
+  const same = all.find((e) => !e.deleted && e.name.toLowerCase() === clean.toLowerCase());
+  if (same) return same.id;
+  const id = `custom-${uid()}`;
+  await db.equipment.put({ id, name: clean, category, custom: true, updatedAt: Date.now() });
+  return id;
+}
+
+/** Remove one of the user's own items from the library (soft delete, so it syncs). */
+export async function deleteEquipment(id: string): Promise<void> {
+  if (!id.startsWith('custom-')) throw new Error('Built-in equipment cannot be deleted.');
+  await db.equipment.update(id, { deleted: true, updatedAt: Date.now() });
 }
 
 export async function equipmentFor(locationId: string | null): Promise<EquipmentId[]> {
@@ -335,15 +354,17 @@ export async function exportAll(): Promise<string> {
     sessions: await db.sessions.toArray(),
     sets: await db.sets.toArray(),
     weights: await db.weights.toArray(),
+    equipment: await db.equipment.toArray(),
   };
   return JSON.stringify(data);
 }
 
-const TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights'] as const;
+const TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights', 'equipment'] as const;
 
 /** Check a backup before touching any data. Returns a readable error, or null if OK. */
 export function validateBackup(data: any): string | null {
   if (!data || data.app !== 'maxfit') return 'This is not a MaxFit backup file.';
+  if (data.equipment === undefined) data.equipment = []; // backups made before the equipment library
   for (const t of TABLES) if (!Array.isArray(data[t])) return `Backup is missing "${t}".`;
   if (data.profile.length !== 1 || data.profile[0]?.id !== 'me') return 'Backup has no valid profile.';
   for (const t of TABLES) if (data[t].some((r: any) => !r || typeof r.id !== 'string')) return `Backup has a broken row in "${t}".`;
@@ -359,7 +380,7 @@ export async function importAll(json: string): Promise<void> {
   const err = validateBackup(data);
   if (err) throw new Error(err);
   const now = Date.now();
-  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights], async () => {
+  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment], async () => {
     for (const t of TABLES) {
       const table = db[t] as any;
       const keep = new Set<string>(data[t].map((r: any) => r.id));
@@ -373,8 +394,8 @@ export async function importAll(json: string): Promise<void> {
 
 /** Erase all MaxFit data on this device (used before another account signs in). */
 export async function wipeLocal(): Promise<void> {
-  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.meta], async () => {
-    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.meta.clear()]);
+  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment, db.meta], async () => {
+    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
   });
   await ensureSeed();
 }

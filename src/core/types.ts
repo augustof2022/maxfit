@@ -1,19 +1,19 @@
 // Core data types for MaxFit. Pure types only: no browser or database code here.
 
-export type EquipmentId =
-  | 'mat'
-  | 'pullup_bar'
-  | 'dip_bars'
-  | 'dumbbell'
-  | 'kettlebell'
-  | 'barbell'
-  | 'bench'
-  | 'resistance_band'
-  | 'jump_rope'
-  | 'treadmill'
-  | 'stationary_bike'
-  | 'cable_machine'
-  | 'leg_press';
+/** A built-in id (see EQUIPMENT in src/core/equipment.ts) or a custom one ("custom-<uuid>"). */
+export type EquipmentId = string;
+
+export type EquipmentCategory = 'basics' | 'free_weights' | 'bars_benches' | 'cardio' | 'machines';
+
+/** One item in the equipment library. Built-ins live in code; custom items live in the database. */
+export interface EquipmentItem {
+  id: EquipmentId;
+  name: string;
+  category: EquipmentCategory;
+  custom?: boolean;
+  updatedAt?: number;
+  deleted?: boolean;
+}
 
 /** How an exercise is measured. */
 export type Metric =

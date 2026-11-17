@@ -7,8 +7,9 @@ npm run dev        # open the printed link; on a phone on the same Wi-Fi: npm ru
 ```
 
 ## Turn on cloud sync (Supabase)
-1. Apply `supabase/migrations/20261117000000_maxfit_rows.sql` to the Supabase project
-   (SQL editor, or ask the team to apply it with the Supabase connector — needs Renz's yes).
+1. Create a new Supabase project for MaxFit (Renz's decision, 2026-11-17). Then apply
+   `supabase/migrations/20261117000000_maxfit_rows.sql` (SQL editor → paste → Run, or tell the
+   team the project name and `backend-dev` applies it with the Supabase connector).
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
    (Project settings → API; the anon/publishable key is public by design. Never the service_role key).
 3. For the GitHub builds, add the same two values as repository **variables** (not secrets needed,

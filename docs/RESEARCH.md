@@ -40,7 +40,7 @@ None of the apps above has an exercise unlock ladder with avatar evolution.
 | BMI is a rough guide; it may not match the same fatness in different people | Body screen note | WHO fact sheet (as above) | Search only |
 
 Note: some Asian-population BMI cut-offs differ from the WHO general ones. MaxFit uses the
-WHO general cut-offs. **Open question Q3** for Renz.
+WHO general cut-offs (Renz said, 2026-11-17).
 
 ## 4. Habit science
 

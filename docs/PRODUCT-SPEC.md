@@ -14,11 +14,11 @@ Status key: ✅ built and tested · 🟡 built, needs a device or Renz's action 
 | 2 | See last rep, record and the number to beat; input today's result | Exercise card: Last · Record · **Beat this**, stepper pre-filled with the target | E2E: target 5 → after 10, "Beat 10: do 11" | ✅ |
 | 3 | Session tracker with rest marking and rest minutes; cardio run / walk / rest / stop, then km and minutes to beat | Live session clock (active vs rest), auto-rest after each set, Start rest / Back to work; cardio panel with Run, Walk, Rest, Stop → km → pace; best km and best pace records | E2E: rest timer, cardio save | ✅ |
 | 4 | Weight and BMI log | Body screen: height, daily weight entry, BMI with WHO category and scale, trend chart, log with delete | E2E: 70 kg / 170 cm → 24.2 Normal | ✅ |
-| 5 | Home / gym sessions with available equipment; correct exercises per place | Locations with kind + 13 equipment items; exercise list filtered by equipment | Unit + E2E: curl at Gym, not at Home | ✅ |
-| 6 | Save a location so equipment loads without re-entering | Saved locations (Home, Gym seeded), last-used remembered | E2E | ✅ |
+| 5 | Home / gym sessions with available equipment; correct exercises per place | **Equipment library** (Renz, 2026-11-17): 37 built-in items in 5 groups, search, quick-fill (Bodyweight / Home basics / Park / Full gym), add your own items (synced); exercise list filtered by equipment; live "N exercises possible here" | Unit + E2E: curl at Gym, not at Home; new place with custom item | ✅ |
+| 6 | Save a location so equipment loads without re-entering | Places: type a name, pick equipment once; "+ New place" also on the Train screen; last-used remembered | E2E: Office gym saved and loaded | ✅ |
 | 7 | Habit builder: short sessions, few exercises, daily totals like "last 2 days 15 min, yesterday 20 min" | Starter mode (first 10 sessions, max 3 exercises); daily minute goal 10 → 45 that grows slowly; Home shows today, last 2 days, yesterday, 7-day exercise/rest chart | Unit: habit goal; E2E screenshot | ✅ |
 | 8 | Alarms: too much rest, weigh-in, start exercise | Rest alarm (sound + vibration, repeats every 30 s; screen-off alarm in Android app); weekly weigh-in and daily workout reminders (Android: scheduled notifications; web: while open) | E2E: rest-over state. Android alarms need the APK | 🟡 |
-| — | Cloud sync with login (Renz's choice) | Email + password login, local-first push/pull, `maxfit_rows` table with RLS | Code + schema ready; not applied to Supabase yet (needs Renz's yes, Q1) | 🟡 |
+| — | Cloud sync with login (Renz's choice) | Email + password login, local-first push/pull, `maxfit_rows` table with RLS | Code + schema ready; waiting for Renz's new Supabase project | 🟡 |
 | — | Android APK | Capacitor project in `android/`; GitHub Actions builds a debug APK | APK built in GitHub Actions (run 1, 2026-11-17, success). Alarms still need a real-phone test | 🟡 |
 | — | Backup | Export / import JSON | Manual | ✅ |
 

@@ -6,7 +6,7 @@ create sequence if not exists public.maxfit_rows_seq;
 
 create table if not exists public.maxfit_rows (
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  tbl text not null check (tbl in ('profile', 'locations', 'sessions', 'sets', 'weights')),
+  tbl text not null,
   id text not null,
   data jsonb not null,
   updated_at bigint not null, -- client clock (ms): the newest copy wins
@@ -14,6 +14,11 @@ create table if not exists public.maxfit_rows (
   seq bigint not null default nextval('public.maxfit_rows_seq'), -- unique pull cursor
   primary key (user_id, tbl, id)
 );
+
+-- Which local tables may sync (re-created so the file can be re-run after adding a table).
+alter table public.maxfit_rows drop constraint if exists maxfit_rows_tbl_check;
+alter table public.maxfit_rows add constraint maxfit_rows_tbl_check
+  check (tbl in ('profile', 'locations', 'sessions', 'sets', 'weights', 'equipment'));
 
 -- In case an earlier draft of this table exists without seq (keeps the file re-runnable).
 alter table public.maxfit_rows add column if not exists seq bigint not null default nextval('public.maxfit_rows_seq');

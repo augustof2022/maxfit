@@ -10,6 +10,7 @@ export function useGame() {
   const sets = useLiveQuery(() => db.sets.toArray(), []) ?? [];
   const locations = (useLiveQuery(() => db.locations.toArray(), []) ?? []).filter((l) => !l.deleted);
   const weights = (useLiveQuery(() => db.weights.orderBy('date').toArray(), []) ?? []).filter((w) => !w.deleted);
+  const customEquipment = useLiveQuery(() => db.equipment.toArray(), []) ?? [];
 
   const derived = useMemo(() => {
     if (!profile) return null;
@@ -36,7 +37,7 @@ export function useGame() {
     };
   }, [profile, sessions, sets, locations]);
 
-  return { profile, sessions, sets, locations, weights, d: derived };
+  return { profile, sessions, sets, locations, weights, customEquipment, d: derived };
 }
 
 export type Game = ReturnType<typeof useGame>;

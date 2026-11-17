@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Location, Profile, Session, WeightEntry, WorkSet } from '../core/types';
+import type { EquipmentItem, Location, Profile, Session, WeightEntry, WorkSet } from '../core/types';
 
 // Local-first database (IndexedDB in the browser and in the Android app).
 // Every row carries updatedAt so cloud sync can merge with last-write-wins.
@@ -15,6 +15,7 @@ export class MaxFitDB extends Dexie {
   sessions!: Table<Session, string>;
   sets!: Table<WorkSet, string>;
   weights!: Table<WeightEntry, string>;
+  equipment!: Table<EquipmentItem, string>;
   meta!: Table<Meta, string>;
 
   constructor(name = 'maxfit') {
@@ -27,12 +28,14 @@ export class MaxFitDB extends Dexie {
       weights: 'id, date, updatedAt',
       meta: 'key',
     });
+    // v2: the user's own equipment items (the built-in library lives in code).
+    this.version(2).stores({ equipment: 'id, updatedAt' });
   }
 }
 
 export const db = new MaxFitDB();
 
-export const SYNC_TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights'] as const;
+export const SYNC_TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights', 'equipment'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 
 export function uid(): string {

@@ -2,10 +2,10 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { totalXp } from '../core/rules';
 import { db } from './db';
-import { ensureSeed, exportAll, finishSession, importAll, logSet, setMode, startSession } from './repo';
+import { addEquipment, deleteEquipment, ensureSeed, exportAll, finishSession, importAll, logSet, setMode, startSession } from './repo';
 
 beforeEach(async () => {
-  await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.meta.clear()]);
+  await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
   await ensureSeed();
 });
 
@@ -89,5 +89,23 @@ describe('backup', () => {
     await importAll(JSON.stringify(backup));
     expect((await db.sessions.get(s2.id))!.deleted).toBe(true);
     expect((await db.sessions.get(s.id))!.updatedAt).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe('equipment library', () => {
+  it('adds a custom item once (same name = same item) and soft-deletes it', async () => {
+    const a = await addEquipment('Hip abductor machine', 'machines');
+    const b = await addEquipment('  hip ABDUCTOR machine ', 'machines');
+    expect(a).toBe(b);
+    expect(a.startsWith('custom-')).toBe(true);
+    await deleteEquipment(a);
+    expect((await db.equipment.get(a))!.deleted).toBe(true);
+    await expect(deleteEquipment('dumbbell')).rejects.toThrow(/Built-in/);
+  });
+  it('an old backup without an equipment list still restores', async () => {
+    const backup = JSON.parse(await exportAll());
+    delete backup.equipment;
+    await importAll(JSON.stringify(backup));
+    expect(await db.profile.get('me')).toBeTruthy();
   });
 });

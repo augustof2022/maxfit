@@ -12,3 +12,8 @@
   forgotten sessions inflated XP, empty sessions farmed unlocks, double-tap Start, non-atomic Finish,
   cardio Cancel without asking. All fixed; 12 new tests (39 total); SQL checked in PGlite.
 - Re-check by code-reviewer: 8/9 fixed, #6 partly → per-mode time caps added (30 min exercise/rest, 4 h run/walk); recent-row re-read now paged; migration adds seq if missing. 43 unit tests, e2e 16/16. First APK built in GitHub Actions.
+
+## 2026-11-17 — Renz's answers + equipment library
+- `main` branch created; draft PR #1 opened. New Supabase project to come from Renz. WHO BMI kept. Fair-play rules kept.
+- Equipment library: places start with a name; 37 built-in items in 5 groups; search; quick-fill; add your own (synced, backups include them); live "exercises possible here". "+ New place" on Train too.
+- Checks: 49 unit tests; e2e 20/20.

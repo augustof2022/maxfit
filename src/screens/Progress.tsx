@@ -1,6 +1,7 @@
 import { Avatar } from '../components/Avatar';
 import { Bar, ICONS } from '../components/ui';
 import { EXERCISES, EXERCISE_BY_ID, TIER_NAMES } from '../core/exercises';
+import { equipmentName } from '../core/equipment';
 import { fmtClock } from '../core/live';
 import { AVATAR_STAGES, COLORS, describeRule, doneSessions, GEAR, ruleProgress } from '../core/rules';
 import { updateProfile } from '../data/repo';
@@ -104,7 +105,7 @@ export function Progress({ game }: { game: Game }) {
                         {!secretHidden && <Bar value={prog.current} max={prog.needed} />}
                       </>
                     )}
-                    {e.equipment.length > 0 && <span className="tiny muted">Needs: {e.equipment.join(', ').replace(/_/g, ' ')}</span>}
+                    {e.equipment.length > 0 && <span className="tiny muted">Needs: {e.equipment.map((id) => equipmentName(id)).join(', ')}</span>}
                   </div>
                 </div>
               );

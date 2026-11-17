@@ -1,24 +1,10 @@
-import type { EquipmentId, Exercise } from './types';
+import type { Exercise } from './types';
 
 // The unlock ladder. Order inside a tier does not matter; the rule decides.
 // Design notes and the reasons for each step: docs/GAME-DESIGN.md
 // To add an exercise, follow .claude/skills/add-exercise/SKILL.md and run `npm run balance`.
 
-export const EQUIPMENT: { id: EquipmentId; name: string }[] = [
-  { id: 'mat', name: 'Exercise mat' },
-  { id: 'pullup_bar', name: 'Pull-up bar' },
-  { id: 'dip_bars', name: 'Dip bars' },
-  { id: 'dumbbell', name: 'Dumbbells' },
-  { id: 'kettlebell', name: 'Kettlebell' },
-  { id: 'barbell', name: 'Barbell + plates' },
-  { id: 'bench', name: 'Bench' },
-  { id: 'resistance_band', name: 'Resistance band' },
-  { id: 'jump_rope', name: 'Jump rope' },
-  { id: 'treadmill', name: 'Treadmill' },
-  { id: 'stationary_bike', name: 'Stationary bike' },
-  { id: 'cable_machine', name: 'Cable machine' },
-  { id: 'leg_press', name: 'Leg press machine' },
-];
+export { EQUIPMENT } from './equipment';
 
 export const TIER_NAMES = ['Secret', 'Starter', 'Habit', 'Builder', 'Strong', 'Advanced', 'Legend'];
 
