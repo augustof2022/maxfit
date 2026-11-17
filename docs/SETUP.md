@@ -18,11 +18,21 @@ npm run dev        # open the printed link; on a phone on the same Wi-Fi: npm ru
    email link, then "Sign in" in MaxFit.
 
 ## Get the Android app (APK)
-1. GitHub → **Actions** → **Android APK** → latest run (or "Run workflow").
-2. Download the artifact **maxfit-debug-apk** on the phone and unzip it.
-3. Open `app-debug.apk`. Allow "install unknown apps" for your browser/files app once.
-4. Open MaxFit → Settings → Reminders → turn on → allow notifications (and "Alarms & reminders"
-   if Android asks).
+
+**Easiest (on your phone):**
+1. Open **https://github.com/augustof2022/maxfit/releases/tag/apk-latest** in Chrome.
+2. Under **Assets**, tap **maxfit-debug.apk**. It downloads.
+3. Open the downloaded file. If Android asks, allow **"Install unknown apps"** for Chrome, then tap **Install**.
+4. Open MaxFit → Settings → Reminders → turn on → allow notifications (and **"Alarms & reminders"** if asked).
+
+A new APK is posted there automatically after every push. To build one by hand:
+GitHub → **Actions** → **Android APK** (left list) → **Run workflow** → in "Use workflow from" pick
+**`ccr-d4bfa360-fifsg2`** (the app branch; `main` only has a README until the PR is merged) →
+green **Run workflow**. Wait about 2–3 minutes for the green tick, then use the link above.
+
+**Other way (computer):** open the finished run → scroll to the bottom → **Artifacts** →
+**maxfit-debug-apk** (a .zip; unzip it to get the .apk). The Artifacts box often does not show
+in the GitHub phone app.
 
 ## Manual test plan for the APK (alarms cannot be tested in a browser)
 | # | Step | Expected |

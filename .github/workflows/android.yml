@@ -3,6 +3,8 @@ on:
   push:
     paths-ignore: ['docs/**', 'team/**', '.claude/**', '*.md']
   workflow_dispatch:
+permissions:
+  contents: write # to publish the APK on the "Latest Android app" release page
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -27,3 +29,13 @@ jobs:
         with:
           name: maxfit-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      # Easy phone download: replace the APK on one fixed release page every build.
+      - name: Publish APK to the "apk-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk maxfit-debug.apk
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest maxfit-debug.apk --prerelease --target "$GITHUB_SHA" \
+            --title "MaxFit Android app (latest test build)" \
+            --notes "Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}. On your phone: tap maxfit-debug.apk below, then open it to install."
