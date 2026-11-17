@@ -1,0 +1,117 @@
+import { useState } from 'react';
+import { LineChart, Stepper } from '../components/ui';
+import { bmi, bmiCategory, dayKey } from '../core/rules';
+import { addWeight, deleteWeight, updateProfile } from '../data/repo';
+import type { Game } from '../data/useGame';
+
+const CAT_COLOR: Record<string, string> = { Underweight: 'var(--rest)', Normal: 'var(--good)', Overweight: 'var(--accent2)', Obese: 'var(--bad)' };
+
+export function Body({ game }: { game: Game }) {
+  const p = game.profile!;
+  const ws = game.weights;
+  const last = ws[ws.length - 1];
+  const [kg, setKg] = useState(last?.kg ?? 70);
+  const [date, setDate] = useState(dayKey(Date.now()));
+  const [height, setHeight] = useState(p.heightCm ?? 0);
+  const b = last && p.heightCm ? bmi(last.kg, p.heightCm) : null;
+  const first = ws[0];
+
+  return (
+    <div className="stack">
+      <h1>Body</h1>
+
+      <section className="card stack" aria-label="BMI">
+        <div className="row between">
+          <div className="stat">
+            <span className="tiny muted">Weight</span>
+            <b className="num">{last ? `${last.kg} kg` : '-'}</b>
+          </div>
+          <div className="stat" style={{ textAlign: 'right' }}>
+            <span className="tiny muted">BMI</span>
+            <b className="num" style={{ color: b ? CAT_COLOR[bmiCategory(b)] : undefined }}>
+              {b ?? '-'} {b && <span className="small">{bmiCategory(b)}</span>}
+            </b>
+          </div>
+        </div>
+        {b && <BmiScale value={b} />}
+        {first && last && first.id !== last.id && (
+          <p className="small muted">
+            Since {first.date}: {last.kg - first.kg > 0 ? '+' : ''}
+            {Math.round((last.kg - first.kg) * 10) / 10} kg
+          </p>
+        )}
+        {!p.heightCm && <p className="small" style={{ color: 'var(--accent2)' }}>Set your height below to see your BMI.</p>}
+        <p className="tiny muted">BMI = kg ÷ (height in m)². WHO adult ranges. A rough guide: it does not tell muscle from fat.</p>
+      </section>
+
+      <section className="card stack" aria-label="Log weight">
+        <h2>Log weight</h2>
+        <div className="row wrap">
+          <Stepper label="Weight" unit="kg" value={kg} step={0.1} onChange={setKg} />
+          <label className="field">
+            Date
+            <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
+          </label>
+        </div>
+        <button className="btn primary big" disabled={kg <= 0} onClick={() => addWeight(date, Math.round(kg * 10) / 10)}>
+          Save weight
+        </button>
+      </section>
+
+      <section className="card stack" aria-label="Trend">
+        <h2>Trend</h2>
+        <LineChart points={ws.slice(-30).map((w) => ({ label: w.date.slice(5), v: w.kg }))} unit="kg" />
+      </section>
+
+      <section className="card stack" aria-label="Height">
+        <h2>Height</h2>
+        <div className="row">
+          <Stepper label="Height" unit="cm" value={height} step={1} onChange={setHeight} />
+        </div>
+        <button className="btn ghost" disabled={height < 100 || height > 250} onClick={() => updateProfile({ heightCm: height })}>
+          Save height
+        </button>
+      </section>
+
+      <section className="card stack" aria-label="Weight log">
+        <h2>Log</h2>
+        {ws.length === 0 && <p className="muted">No weigh-ins yet.</p>}
+        {[...ws].reverse().map((w) => (
+          <div key={w.id} className="row between small">
+            <span className="num">{w.date}</span>
+            <span className="num">
+              {w.kg} kg{p.heightCm ? ` · BMI ${bmi(w.kg, p.heightCm)}` : ''}
+            </span>
+            <button className="btn ghost" style={{ minHeight: 32, padding: '4px 10px' }} onClick={() => deleteWeight(w.id)} aria-label={`Delete ${w.date}`}>
+              ✕
+            </button>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function BmiScale({ value }: { value: number }) {
+  const lo = 15;
+  const hi = 35;
+  const pos = (v: number) => `${((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * 100}%`;
+  return (
+    <div style={{ position: 'relative', height: 26 }} aria-hidden>
+      <div style={{ display: 'flex', height: 8, borderRadius: 99, overflow: 'hidden', marginTop: 4 }}>
+        <div style={{ width: pos(18.5), background: CAT_COLOR.Underweight }} />
+        <div style={{ width: `calc(${pos(25)} - ${pos(18.5)})`, background: CAT_COLOR.Normal }} />
+        <div style={{ width: `calc(${pos(30)} - ${pos(25)})`, background: CAT_COLOR.Overweight }} />
+        <div style={{ flex: 1, background: CAT_COLOR.Obese }} />
+      </div>
+      <div style={{ position: 'absolute', left: pos(value), top: 0, width: 4, height: 16, background: '#fff', borderRadius: 2, transform: 'translateX(-2px)' }} />
+      <div className="tiny muted" style={{ position: 'relative', height: 14, marginTop: 4 }}>
+        {[15, 18.5, 25, 30, 35].map((v) => (
+          <span key={v} style={{ position: 'absolute', left: pos(v), transform: v === 15 ? 'none' : v === 35 ? 'translateX(-100%)' : 'translateX(-50%)' }}>
+            {v}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

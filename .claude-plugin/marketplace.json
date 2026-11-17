@@ -1,0 +1,14 @@
+{
+  "name": "maxfit",
+  "description": "Tools for building MaxFit, the gamified gym and fitness tracker.",
+  "owner": {
+    "name": "MaxFit team"
+  },
+  "plugins": [
+    {
+      "name": "maxfit-devkit",
+      "source": "./plugins/maxfit-devkit",
+      "description": "MaxFit dev kit: /maxfit-devkit:qa, :balance, :new-exercise, :ship, :status and a balance-check reminder hook."
+    }
+  ]
+}

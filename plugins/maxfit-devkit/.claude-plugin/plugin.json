@@ -1,0 +1,6 @@
+{
+  "name": "maxfit-devkit",
+  "version": "0.1.0",
+  "description": "Slash commands and hooks for building MaxFit: quality gate, game balance, new exercises, Android release and project status.",
+  "author": { "name": "MaxFit team" }
+}
