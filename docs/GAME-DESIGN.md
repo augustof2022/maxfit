@@ -84,6 +84,8 @@ Fair-play rules (from the code review, 2026-11-17) **[Design choice; Q6 for Renz
   so they never count toward "N sessions" unlocks or open a chest.
 - Streak and daily-goal bonuses are paid once per day, not per session.
 - A session left open with no activity for 30+ minutes ends 1 minute after the last activity.
+- One unbroken stretch counts at most 30 min of exercise or rest (4 h for run / walk), so a
+  rest left running overnight cannot add hours.
 - Total XP is the sum of each session's XP (not a stored counter), so two devices can never
   overwrite each other's XP.
 

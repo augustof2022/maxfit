@@ -15,6 +15,9 @@ create table if not exists public.maxfit_rows (
   primary key (user_id, tbl, id)
 );
 
+-- In case an earlier draft of this table exists without seq (keeps the file re-runnable).
+alter table public.maxfit_rows add column if not exists seq bigint not null default nextval('public.maxfit_rows_seq');
+
 create index if not exists maxfit_rows_pull_idx on public.maxfit_rows (user_id, seq);
 create index if not exists maxfit_rows_time_idx on public.maxfit_rows (user_id, server_updated_at);
 

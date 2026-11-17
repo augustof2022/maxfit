@@ -19,7 +19,7 @@ Status key: ✅ built and tested · 🟡 built, needs a device or Renz's action 
 | 7 | Habit builder: short sessions, few exercises, daily totals like "last 2 days 15 min, yesterday 20 min" | Starter mode (first 10 sessions, max 3 exercises); daily minute goal 10 → 45 that grows slowly; Home shows today, last 2 days, yesterday, 7-day exercise/rest chart | Unit: habit goal; E2E screenshot | ✅ |
 | 8 | Alarms: too much rest, weigh-in, start exercise | Rest alarm (sound + vibration, repeats every 30 s; screen-off alarm in Android app); weekly weigh-in and daily workout reminders (Android: scheduled notifications; web: while open) | E2E: rest-over state. Android alarms need the APK | 🟡 |
 | — | Cloud sync with login (Renz's choice) | Email + password login, local-first push/pull, `maxfit_rows` table with RLS | Code + schema ready; not applied to Supabase yet (needs Renz's yes, Q1) | 🟡 |
-| — | Android APK | Capacitor project in `android/`; GitHub Actions builds a debug APK | Generates here; Gradle build runs in CI | 🟡 |
+| — | Android APK | Capacitor project in `android/`; GitHub Actions builds a debug APK | APK built in GitHub Actions (run 1, 2026-11-17, success). Alarms still need a real-phone test | 🟡 |
 | — | Backup | Export / import JSON | Manual | ✅ |
 
 ## Out of scope for v0.1 (see `team/BACKLOG.md`)

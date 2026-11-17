@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { totalXp } from '../core/rules';
 import { db } from './db';
-import { ensureSeed, exportAll, finishSession, importAll, logSet, startSession } from './repo';
+import { ensureSeed, exportAll, finishSession, importAll, logSet, setMode, startSession } from './repo';
 
 beforeEach(async () => {
   await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.meta.clear()]);
@@ -59,6 +59,17 @@ describe('sessions', () => {
     const sum = await finishSession(s.id);
     expect(sum.trimmed).toBe(true);
     expect(sum.session.activeSec + sum.session.restSec).toBeLessThanOrEqual(3 * 60);
+  });
+
+  it('a forgotten rest is capped at 30 minutes even after a mode switch', async () => {
+    const s = await startSession('home');
+    await logSet(s.id, 'push_up', { reps: 8 });
+    const thirteenHoursAgo = Date.now() - 13 * 3600_000;
+    const live = (await db.sessions.get(s.id))!.live!;
+    await db.sessions.update(s.id, { live: { ...live, mode: 'rest', modeStartedAt: thirteenHoursAgo } });
+    await setMode(s.id, 'exercise'); // "Back to work" the next morning
+    const sum = await finishSession(s.id);
+    expect(sum.session.restSec).toBeLessThanOrEqual(30 * 60);
   });
 });
 

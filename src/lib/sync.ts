@@ -117,9 +117,15 @@ async function pull(): Promise<number> {
   // 2. Re-read the last 2 minutes: a row whose upload committed late can have a lower seq.
   if (lastTime) {
     const since = new Date(new Date(lastTime).getTime() - OVERLAP_MS).toISOString();
-    const { data, error } = await supabase!.from('maxfit_rows').select('tbl,id,data').gte('server_updated_at', since).limit(PAGE);
-    if (error) throw error;
-    if (data) pulled += await applyRemote(data as any);
+    let after = 0;
+    for (;;) {
+      const { data, error } = await supabase!.from('maxfit_rows').select('tbl,id,data,seq').gte('server_updated_at', since).gt('seq', after).order('seq', { ascending: true }).limit(PAGE);
+      if (error) throw error;
+      if (!data?.length) break;
+      pulled += await applyRemote(data as any);
+      after = Number(data[data.length - 1].seq);
+      if (data.length < PAGE) break;
+    }
   }
 
   await setMeta('pullSeq', cursor);

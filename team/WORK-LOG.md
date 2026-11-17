@@ -11,3 +11,4 @@
   server overwrote newer rows, pull paging could skip rows, restore never synced, two accounts could mix,
   forgotten sessions inflated XP, empty sessions farmed unlocks, double-tap Start, non-atomic Finish,
   cardio Cancel without asking. All fixed; 12 new tests (39 total); SQL checked in PGlite.
+- Re-check by code-reviewer: 8/9 fixed, #6 partly → per-mode time caps added (30 min exercise/rest, 4 h run/walk); recent-row re-read now paged; migration adds seq if missing. 43 unit tests, e2e 16/16. First APK built in GitHub Actions.
