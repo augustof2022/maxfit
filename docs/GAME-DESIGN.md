@@ -72,12 +72,20 @@ progression (8→12 reps, then +2.5 kg), distance +0.1 km or a faster pace.
 | Each new record | 25 |
 | Finishing a session | 20 |
 | Each active minute | 1 |
-| Streak bonus | 5 per streak day, max 50 |
-| Daily goal met | 30 |
+| Streak bonus (first session of the day only) | 5 per streak day, max 50 |
+| Daily goal met (once, in the session that reaches it) | 30 |
 | Surprise challenge beaten | 100 |
 | Mystery chest (sometimes) | 20–60 |
 
 Total XP to reach level n = 100 · n · (n − 1). L2 = 200, L5 = 2,000, L10 = 9,000, L20 = 38,000.
+
+Fair-play rules (from the code review, 2026-11-17) **[Design choice; Q6 for Renz]**:
+- A session needs at least one logged set (or a run) to finish. Empty sessions can only be discarded,
+  so they never count toward "N sessions" unlocks or open a chest.
+- Streak and daily-goal bonuses are paid once per day, not per session.
+- A session left open with no activity for 30+ minutes ends 1 minute after the last activity.
+- Total XP is the sum of each session's XP (not a stored counter), so two devices can never
+  overwrite each other's XP.
 
 ## Avatar evolution
 

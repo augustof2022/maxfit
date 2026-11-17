@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sheet, Stepper } from '../components/ui';
 import { EQUIPMENT } from '../core/exercises';
 import type { EquipmentId, Location } from '../core/types';
-import { deleteLocation, exportAll, importAll, saveLocation, updateProfile, updateSettings } from '../data/repo';
+import { deleteLocation, exportAll, importAll, saveLocation, updateProfile, updateSettings, wipeLocal } from '../data/repo';
 import type { Game } from '../data/useGame';
 import { alarm, primeAudio } from '../lib/alarm';
 import { askPermission, isNative } from '../lib/notify';
@@ -154,6 +154,21 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
             />
           </label>
         </div>
+      </section>
+
+      <section className="card stack" aria-label="Erase">
+        <h2>Erase this device</h2>
+        <p className="small muted">Removes all MaxFit data from this phone (cloud data stays). Use before someone else signs in here. Export a backup first.</p>
+        <button
+          className="btn danger"
+          onClick={async () => {
+            if (!confirm('Erase ALL MaxFit data on this device? This cannot be undone.')) return;
+            await wipeLocal();
+            toast('This device was erased');
+          }}
+        >
+          Erase this device
+        </button>
       </section>
 
       <p className="tiny muted" style={{ textAlign: 'center' }}>

@@ -33,6 +33,11 @@ export function doneSessions(sessions: Session[]): Session[] {
   return sessions.filter((s) => s.status === 'done' && !s.deleted).sort((a, b) => a.startedAt - b.startedAt);
 }
 
+/** Total XP = sum of what each finished session earned. Derived, so two devices can never lose each other's XP. */
+export function totalXp(sessions: Session[]): number {
+  return doneSessions(sessions).reduce((t, s) => t + (s.xpEarned || 0), 0);
+}
+
 /** Days in a row with at least one finished session. Alive if the last one was today or yesterday. */
 export function currentStreak(sessions: Session[], now: number): number {
   const days = [...new Set(doneSessions(sessions).map((s) => dayKey(s.startedAt)))].sort();

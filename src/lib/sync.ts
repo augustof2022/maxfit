@@ -1,8 +1,10 @@
-// Cloud sync with Supabase. The phone database stays the main copy (works offline at the gym);
-// this pushes local changes up and pulls changes from other devices, last-write-wins per row.
+// Cloud sync with Supabase. The phone database stays the main copy (works offline at the gym).
+// Order: pull first (so a new device never overwrites real data), then push.
+// The server keeps the newest copy per row (maxfit_push only overwrites older rows).
 
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { db, SYNC_TABLES, type SyncTable } from '../data/db';
+import { mergeRow } from './merge';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -11,7 +13,7 @@ export const supabase: SupabaseClient | null = url && key ? createClient(url, ke
 
 export const syncConfigured = !!supabase;
 
-type Row = { id: string; updatedAt: number };
+type Row = { id: string; updatedAt: number; [k: string]: unknown };
 
 async function getMeta<T>(k: string, fallback: T): Promise<T> {
   return ((await db.meta.get(k))?.value as T) ?? fallback;
@@ -39,10 +41,9 @@ export async function signUp(email: string, password: string) {
   return { needsConfirm: !data.session };
 }
 
+/** Signs out. Local data stays (it is still yours, and the app works offline). */
 export async function signOut() {
   await supabase?.auth.signOut();
-  await setMeta('lastPush', 0);
-  await setMeta('lastPull', null);
 }
 
 export interface SyncResult {
@@ -53,58 +54,94 @@ export interface SyncResult {
 
 let running: Promise<SyncResult> | null = null;
 
-/** Push then pull. Safe to call often; concurrent calls share one run. */
+/** Pull then push. Safe to call often; concurrent calls share one run. */
 export function syncNow(): Promise<SyncResult> {
   if (!running) running = doSync().finally(() => (running = null));
   return running;
 }
 
+const PAGE = 1000;
+const OVERLAP_MS = 2 * 60_000; // re-read recent rows in case a slow upload committed late
+
 async function doSync(): Promise<SyncResult> {
   const user = await currentUser();
   if (!supabase || !user) throw new Error('Sign in to sync.');
-  const startedAt = Date.now();
 
-  // 1. Push rows changed since the last push.
+  // Never mix two accounts' data on one phone.
+  const owner = await getMeta<string | null>('ownerId', null);
+  if (owner && owner !== user.id) {
+    throw new Error('This phone has MaxFit data from another account. Export a backup, then Settings → Erase this device, then sign in again.');
+  }
+  if (!owner) await setMeta('ownerId', user.id);
+
+  const startedAt = Date.now();
+  const pulled = await pull();
+  const pushed = await push(startedAt);
+  const result = { pushed, pulled, at: Date.now() };
+  await setMeta('lastSync', result);
+  return result;
+}
+
+async function applyRemote(rows: { tbl: string; id: string; data: Row }[]): Promise<number> {
+  let n = 0;
+  for (const r of rows) {
+    const tbl = r.tbl as SyncTable;
+    if (!SYNC_TABLES.includes(tbl)) continue;
+    const table = db[tbl] as any;
+    const merged = mergeRow(tbl, (await table.get(r.id)) as Row | undefined, r.data);
+    if (merged) {
+      await table.put(merged);
+      n++;
+    }
+  }
+  return n;
+}
+
+async function pull(): Promise<number> {
+  let cursor = await getMeta<number>('pullSeq', 0);
+  const lastTime = await getMeta<string | null>('pullTime', null);
+  let maxTime = lastTime;
+  let pulled = 0;
+
+  // 1. Page through new rows by a unique, increasing sequence number (no rows skipped).
+  for (;;) {
+    const { data, error } = await supabase!.from('maxfit_rows').select('tbl,id,data,seq,server_updated_at').gt('seq', cursor).order('seq', { ascending: true }).limit(PAGE);
+    if (error) throw error;
+    if (!data?.length) break;
+    pulled += await applyRemote(data as any);
+    cursor = Number(data[data.length - 1].seq);
+    for (const r of data) if (!maxTime || r.server_updated_at > maxTime) maxTime = r.server_updated_at;
+    if (data.length < PAGE) break;
+  }
+
+  // 2. Re-read the last 2 minutes: a row whose upload committed late can have a lower seq.
+  if (lastTime) {
+    const since = new Date(new Date(lastTime).getTime() - OVERLAP_MS).toISOString();
+    const { data, error } = await supabase!.from('maxfit_rows').select('tbl,id,data').gte('server_updated_at', since).limit(PAGE);
+    if (error) throw error;
+    if (data) pulled += await applyRemote(data as any);
+  }
+
+  await setMeta('pullSeq', cursor);
+  if (maxTime) await setMeta('pullTime', maxTime);
+  return pulled;
+}
+
+async function push(startedAt: number): Promise<number> {
   const lastPush = await getMeta<number>('lastPush', 0);
   let pushed = 0;
   for (const tbl of SYNC_TABLES) {
     const rows = ((await (db[tbl] as any).toArray()) as Row[]).filter((r) => r.updatedAt > lastPush);
     for (let i = 0; i < rows.length; i += 500) {
-      const chunk = rows.slice(i, i + 500).map((r) => ({ user_id: user.id, tbl, id: r.id, data: r, updated_at: r.updatedAt }));
-      const { error } = await supabase.from('maxfit_rows').upsert(chunk, { onConflict: 'user_id,tbl,id' });
+      const chunk = rows.slice(i, i + 500).map((r) => ({ tbl, id: r.id, data: r, updated_at: r.updatedAt }));
+      // Server-side upsert that only replaces an OLDER row (see supabase/migrations).
+      const { error } = await supabase!.rpc('maxfit_push', { rows: chunk });
       if (error) throw error;
       pushed += chunk.length;
     }
   }
   await setMeta('lastPush', startedAt);
-
-  // 2. Pull rows changed on the server since the last pull (server clock).
-  const lastPull = await getMeta<string | null>('lastPull', null);
-  let pulled = 0;
-  let cursor = lastPull;
-  for (;;) {
-    let q = supabase.from('maxfit_rows').select('tbl,id,data,updated_at,server_updated_at').order('server_updated_at', { ascending: true }).limit(1000);
-    if (cursor) q = q.gt('server_updated_at', cursor);
-    const { data, error } = await q;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    for (const r of data) {
-      const tbl = r.tbl as SyncTable;
-      if (!SYNC_TABLES.includes(tbl)) continue;
-      const table = db[tbl] as any;
-      const local = (await table.get(r.id)) as Row | undefined;
-      if (!local || local.updatedAt < r.updated_at) {
-        await table.put(r.data);
-        pulled++;
-      }
-    }
-    cursor = data[data.length - 1].server_updated_at;
-    if (data.length < 1000) break;
-  }
-  if (cursor) await setMeta('lastPull', cursor);
-  const result = { pushed, pulled, at: Date.now() };
-  await setMeta('lastSync', result);
-  return result;
+  return pushed;
 }
 
 export async function lastSync(): Promise<SyncResult | null> {

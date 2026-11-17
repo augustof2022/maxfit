@@ -16,6 +16,7 @@ import {
   newUnlocks,
   openChest,
   sessionXp,
+  totalXp,
   XP,
   type ChestReward,
 } from '../core/rules';
@@ -30,12 +31,12 @@ export const DEFAULT_SETTINGS: Settings = {
   weighReminder: { enabled: false, time: '07:00', day: 0 },
 };
 
-export function defaultProfile(now = Date.now()): Profile {
+/** Seed rows use updatedAt 0, so any real copy from the cloud wins over them. */
+export function defaultProfile(now = 0): Profile {
   return {
     id: 'me',
     name: '',
     heightCm: null,
-    xp: 0,
     unlocked: [...STARTER_IDS],
     cosmetics: ['ember'],
     color: 'ember',
@@ -53,9 +54,9 @@ export async function ensureSeed(): Promise<void> {
   await db.transaction('rw', db.profile, db.locations, async () => {
     if (!(await db.profile.get('me'))) await db.profile.put(defaultProfile());
     if ((await db.locations.count()) === 0) {
-      const now = Date.now();
-      const home: Location = { id: uid(), name: 'Home', kind: 'home', equipment: ['mat'], updatedAt: now };
-      const gym: Location = { id: uid(), name: 'Gym', kind: 'gym', equipment: EQUIPMENT.map((e) => e.id), updatedAt: now };
+      // Fixed ids: the same seed on two devices is the same row, not a duplicate.
+      const home: Location = { id: 'home', name: 'Home', kind: 'home', equipment: ['mat'], updatedAt: 0 };
+      const gym: Location = { id: 'gym', name: 'Gym', kind: 'gym', equipment: EQUIPMENT.map((e) => e.id), updatedAt: 0 };
       await db.locations.bulkPut([home, gym]);
       await db.profile.update('me', { lastLocationId: home.id });
     }
@@ -103,13 +104,16 @@ export async function activeSession(): Promise<Session | undefined> {
 }
 
 export async function startSession(locationId: string | null): Promise<Session> {
-  const existing = await activeSession();
-  if (existing) return existing;
-  const now = Date.now();
-  const s: Session = { id: uid(), startedAt: now, endedAt: null, locationId, status: 'active', activeSec: 0, restSec: 0, xpEarned: 0, prs: 0, live: newLive(now), updatedAt: now };
-  await db.sessions.put(s);
-  await updateProfile({ lastLocationId: locationId });
-  return s;
+  // One transaction: a double tap cannot create two active sessions.
+  return db.transaction('rw', db.sessions, db.profile, async () => {
+    const existing = await activeSession();
+    if (existing) return existing;
+    const now = Date.now();
+    const s: Session = { id: uid(), startedAt: now, endedAt: null, locationId, status: 'active', activeSec: 0, restSec: 0, xpEarned: 0, prs: 0, live: newLive(now), updatedAt: now };
+    await db.sessions.put(s);
+    await updateProfile({ lastLocationId: locationId });
+    return s;
+  });
 }
 
 export async function setMode(sessionId: string, mode: LiveMode): Promise<void> {
@@ -201,92 +205,109 @@ export interface SessionSummary {
   habitTargetMin: number;
   habitMet: boolean;
   streak: number;
+  /** true when the session was left open and was ended at the last activity */
+  trimmed: boolean;
 }
 
+/** A session with no activity for this long was forgotten; it ends at the last activity. */
+export const IDLE_CAP_MS = 30 * 60_000;
+
 export async function finishSession(id: string): Promise<SessionSummary> {
-  const now = Date.now();
-  const s = await db.sessions.get(id);
-  if (!s || !s.live) throw new Error('No active session');
-  const t = totals(s.live, now);
-  const activeSec = Math.round(activeSeconds(t));
-  const restSec = Math.round(t.rest);
-  const profile = await getProfile();
-  const sessionSets = (await db.sets.where('sessionId').equals(id).toArray()).filter((x) => !x.deleted);
-  const prs = sessionSets.filter((x) => x.isPR).length;
+  // One transaction: a sync or a second tap cannot interleave and overwrite the result.
+  return db.transaction('rw', [db.sessions, db.sets, db.profile, db.locations], async () => {
+    const s = await db.sessions.get(id);
+    if (!s || !s.live || s.status !== 'active') throw new Error('This session is already finished.');
+    const sessionSets = (await db.sets.where('sessionId').equals(id).toArray()).filter((x) => !x.deleted);
+    if (sessionSets.length === 0) throw new Error('Log at least one set (or a run) before finishing. Or discard the session.');
 
-  const allSessions = await db.sessions.toArray();
-  const targetBefore = habitTarget(allSessions, profile.habitBaseMin, profile.habitCapMin);
-  const finished: Session = { ...s, status: 'done', endedAt: now, activeSec, restSec, prs, live: null, updatedAt: now };
-  const sessionsAfter = allSessions.map((x) => (x.id === id ? finished : x));
-  const todayMin = doneSessions(sessionsAfter)
-    .filter((x) => dayKey(x.startedAt) === dayKey(now))
-    .reduce((a, x) => a + x.activeSec + x.restSec, 0) / 60;
-  const habitMet = todayMin >= targetBefore;
+    // Forgotten session: end it shortly after the last activity, not hours later.
+    const now = Date.now();
+    const lastActivity = Math.max(s.live.modeStartedAt, ...sessionSets.map((x) => x.at));
+    const trimmed = now - lastActivity > IDLE_CAP_MS;
+    const endAt = trimmed ? lastActivity + 60_000 : now;
 
-  const sets = await allSets();
-  const statsPre = buildStats(sessionsAfter, sets, profile.xp, now);
-  const parts = [
-    { label: plural(sessionSets.length, 'set'), xp: sessionSets.length * XP.perSet },
-    { label: plural(prs, 'new record'), xp: prs * XP.perPR },
-    { label: 'Session done', xp: XP.sessionDone },
-    { label: plural(Math.floor(activeSec / 60), 'active minute'), xp: Math.floor(activeSec / 60) * XP.perActiveMinute },
-    { label: `${statsPre.streak}-day streak`, xp: Math.min(XP.streakCap, statsPre.streak * XP.perStreakDay) },
-    { label: 'Daily goal met', xp: habitMet ? XP.habitGoalMet : 0 },
-  ];
-  let xp = sessionXp({ sets: sessionSets.length, prs, activeSec, streak: statsPre.streak, habitMet });
+    const t = totals(s.live, endAt);
+    const activeSec = Math.round(activeSeconds(t));
+    const restSec = Math.round(t.rest);
+    const profile = await getProfile();
+    const prs = sessionSets.filter((x) => x.isPR).length;
 
-  // Surprise challenge from an earlier chest
-  let challengeDone = false;
-  let challenge = profile.challenge;
-  if (challenge && challengeMet(challenge, sessionSets)) {
-    challengeDone = true;
-    xp += challenge.xp;
-    parts.push({ label: 'Surprise challenge beaten', xp: challenge.xp });
-    challenge = null;
-  }
+    const allSessions = await db.sessions.toArray();
+    const xpBefore = totalXp(allSessions);
+    const targetBefore = habitTarget(allSessions, profile.habitBaseMin, profile.habitCapMin);
+    const today = dayKey(s.startedAt);
+    const earlierToday = doneSessions(allSessions).filter((x) => dayKey(x.startedAt) === today);
+    const minBefore = earlierToday.reduce((a, x) => a + x.activeSec + x.restSec, 0) / 60;
+    const minAfter = minBefore + (activeSec + restSec) / 60;
+    // Streak and daily-goal bonuses are paid once per day [Design choice; Q6 for Renz].
+    const firstToday = earlierToday.length === 0;
+    const habitMet = minAfter >= targetBefore;
+    const goalCrossedNow = habitMet && minBefore < targetBefore;
 
-  const levelBefore = levelFromXp(profile.xp);
-  let newXp = profile.xp + xp;
-  const stats = buildStats(sessionsAfter, sets, newXp, now);
-  const unlockedNow = newUnlocks(profile.unlocked, stats);
-  let unlocked = [...profile.unlocked, ...unlockedNow];
+    const finished: Session = { ...s, status: 'done', endedAt: endAt, activeSec, restSec, prs, live: null, updatedAt: now };
+    const sessionsAfter = allSessions.map((x) => (x.id === id ? finished : x));
+    const sets = await allSets();
+    const statsPre = buildStats(sessionsAfter, sets, xpBefore, now);
+    const streakBonus = firstToday ? Math.min(XP.streakCap, statsPre.streak * XP.perStreakDay) : 0;
+    const parts = [
+      { label: plural(sessionSets.length, 'set'), xp: sessionSets.length * XP.perSet },
+      { label: plural(prs, 'new record'), xp: prs * XP.perPR },
+      { label: 'Session done', xp: XP.sessionDone },
+      { label: plural(Math.floor(activeSec / 60), 'active minute'), xp: Math.floor(activeSec / 60) * XP.perActiveMinute },
+      { label: `${statsPre.streak}-day streak (once a day)`, xp: streakBonus },
+      { label: 'Daily goal met', xp: goalCrossedNow ? XP.habitGoalMet : 0 },
+    ];
+    let xp = sessionXp({ sets: sessionSets.length, prs, activeSec, streak: firstToday ? statsPre.streak : 0, habitMet: goalCrossedNow });
 
-  // Mystery chest
-  const equipment = await equipmentFor(s.locationId);
-  const chest = openChest(id, { unlocked, cosmetics: profile.cosmetics, hadPR: prs > 0, records: stats.records, available: availableExercises(unlocked, equipment) });
-  let cosmetics = profile.cosmetics;
-  if (chest.kind === 'xp') {
-    newXp += chest.xp;
-    parts.push({ label: 'Mystery chest', xp: chest.xp });
-  } else if (chest.kind === 'color') cosmetics = [...cosmetics, chest.colorId];
-  else if (chest.kind === 'secret') unlocked = [...unlocked, chest.exerciseId];
-  else if (chest.kind === 'challenge') challenge = chest.challenge;
+    // Surprise challenge from an earlier chest
+    let challengeDone = false;
+    let challenge = profile.challenge;
+    if (challenge && challengeMet(challenge, sessionSets)) {
+      challengeDone = true;
+      xp += challenge.xp;
+      parts.push({ label: 'Surprise challenge beaten', xp: challenge.xp });
+      challenge = null;
+    }
 
-  // Level-ups can open level-based unlocks too.
-  const stats2 = buildStats(sessionsAfter, sets, newXp, now);
-  const more = newUnlocks(unlocked, stats2);
-  unlocked = [...unlocked, ...more];
+    const stats = buildStats(sessionsAfter, sets, xpBefore + xp, now);
+    const unlockedNow = newUnlocks(profile.unlocked, stats);
+    let unlocked = [...profile.unlocked, ...unlockedNow];
 
-  finished.xpEarned = newXp - profile.xp;
-  await db.transaction('rw', db.sessions, db.profile, async () => {
+    // Mystery chest
+    const equipment = await equipmentFor(s.locationId);
+    const chest = openChest(id, { unlocked, cosmetics: profile.cosmetics, hadPR: prs > 0, records: stats.records, available: availableExercises(unlocked, equipment) });
+    let cosmetics = profile.cosmetics;
+    if (chest.kind === 'xp') {
+      xp += chest.xp;
+      parts.push({ label: 'Mystery chest', xp: chest.xp });
+    } else if (chest.kind === 'color') cosmetics = [...cosmetics, chest.colorId];
+    else if (chest.kind === 'secret') unlocked = [...unlocked, chest.exerciseId];
+    else if (chest.kind === 'challenge') challenge = chest.challenge;
+
+    // Level-ups can open level-based unlocks too.
+    const more = newUnlocks(unlocked, buildStats(sessionsAfter, sets, xpBefore + xp, now));
+    unlocked = [...unlocked, ...more];
+
+    finished.xpEarned = xp;
     await db.sessions.put(finished);
-    await db.profile.update('me', { xp: newXp, unlocked, cosmetics, challenge, updatedAt: now });
-  });
+    await db.profile.update('me', { unlocked, cosmetics, challenge, updatedAt: now });
 
-  return {
-    session: finished,
-    sets: sessionSets,
-    xp: newXp - profile.xp,
-    xpParts: parts.filter((p) => p.xp > 0),
-    levelBefore,
-    levelAfter: levelFromXp(newXp),
-    unlocked: [...unlockedNow, ...more, ...(chest.kind === 'secret' ? [chest.exerciseId] : [])],
-    chest,
-    challengeDone,
-    habitTargetMin: habitTarget(sessionsAfter, profile.habitBaseMin, profile.habitCapMin),
-    habitMet,
-    streak: stats.streak,
-  };
+    return {
+      session: finished,
+      sets: sessionSets,
+      xp,
+      xpParts: parts.filter((p) => p.xp > 0),
+      levelBefore: levelFromXp(xpBefore),
+      levelAfter: levelFromXp(xpBefore + xp),
+      unlocked: [...unlockedNow, ...more, ...(chest.kind === 'secret' ? [chest.exerciseId] : [])],
+      chest,
+      challengeDone,
+      habitTargetMin: habitTarget(sessionsAfter, profile.habitBaseMin, profile.habitCapMin),
+      habitMet,
+      streak: stats.streak,
+      trimmed,
+    };
+  });
 }
 
 // ---------- weight ----------
@@ -318,15 +339,42 @@ export async function exportAll(): Promise<string> {
   return JSON.stringify(data);
 }
 
+const TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights'] as const;
+
+/** Check a backup before touching any data. Returns a readable error, or null if OK. */
+export function validateBackup(data: any): string | null {
+  if (!data || data.app !== 'maxfit') return 'This is not a MaxFit backup file.';
+  for (const t of TABLES) if (!Array.isArray(data[t])) return `Backup is missing "${t}".`;
+  if (data.profile.length !== 1 || data.profile[0]?.id !== 'me') return 'Backup has no valid profile.';
+  for (const t of TABLES) if (data[t].some((r: any) => !r || typeof r.id !== 'string')) return `Backup has a broken row in "${t}".`;
+  return null;
+}
+
+/**
+ * Restore a backup. Rows get updatedAt = now so they sync up and win; rows not in the backup
+ * are soft-deleted (not cleared) so the delete also reaches the cloud.
+ */
 export async function importAll(json: string): Promise<void> {
   const data = JSON.parse(json);
-  if (data.app !== 'maxfit') throw new Error('This is not a MaxFit backup file.');
+  const err = validateBackup(data);
+  if (err) throw new Error(err);
+  const now = Date.now();
   await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights], async () => {
-    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear()]);
-    await db.profile.bulkPut(data.profile ?? []);
-    await db.locations.bulkPut(data.locations ?? []);
-    await db.sessions.bulkPut(data.sessions ?? []);
-    await db.sets.bulkPut(data.sets ?? []);
-    await db.weights.bulkPut(data.weights ?? []);
+    for (const t of TABLES) {
+      const table = db[t] as any;
+      const keep = new Set<string>(data[t].map((r: any) => r.id));
+      const current = (await table.toArray()) as { id: string; deleted?: boolean }[];
+      const gone = current.filter((r) => !keep.has(r.id) && !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now }));
+      await table.bulkPut([...data[t].map((r: any) => ({ ...r, updatedAt: now })), ...gone]);
+    }
   });
+  // Old backups had profile.xp; XP is now derived from sessions, so the field is ignored.
+}
+
+/** Erase all MaxFit data on this device (used before another account signs in). */
+export async function wipeLocal(): Promise<void> {
+  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.meta], async () => {
+    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.meta.clear()]);
+  });
+  await ensureSeed();
 }

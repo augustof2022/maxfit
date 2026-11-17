@@ -33,14 +33,21 @@ function LocationPicker({ game, value, onPick }: { game: Game; value: string | n
 
 function PreSession({ game }: Props) {
   const d = game.d!;
+  const [busy, setBusy] = useState(false);
   const loc = d.location;
   const plan = starterPlan(d.available, d.stats.sessions);
   const eqNames = (loc?.equipment ?? []).map((id) => EQUIPMENT.find((e) => e.id === id)?.name).filter(Boolean);
 
   const start = async () => {
+    if (busy) return;
+    setBusy(true);
     primeAudio();
-    await startSession(loc?.id ?? null);
-    void keepAwake(true);
+    try {
+      await startSession(loc?.id ?? null);
+      void keepAwake(true);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -84,7 +91,7 @@ function PreSession({ game }: Props) {
         })}
       </section>
 
-      <button className="btn primary big" onClick={start}>
+      <button className="btn primary big" onClick={start} disabled={busy}>
         Start session
       </button>
     </div>
@@ -131,6 +138,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   const lastAlarm = useRef(0);
   const [open, setOpen] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState<'finish' | 'discard' | null>(null);
+  const [busy, setBusy] = useState(false);
   const sessionSets = d.liveSets.filter((s) => s.sessionId === session.id);
   const plan = starterPlan(d.available, d.stats.sessions).map((x) => x.exerciseId);
   const ordered = [...d.available].sort((a, b) => Number(plan.includes(b.id)) - Number(plan.includes(a.id)));
@@ -168,10 +176,19 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   };
 
   const finish = async () => {
-    void cancelRestAlarm();
-    const s = await finishSession(session.id);
-    void keepAwake(false);
-    onFinished(s);
+    if (busy) return;
+    setBusy(true);
+    try {
+      void cancelRestAlarm();
+      const s = await finishSession(session.id);
+      void keepAwake(false);
+      setConfirmEnd(null);
+      onFinished(s);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -236,10 +253,11 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
         <button className="btn danger" onClick={() => setConfirmEnd('discard')}>
           Discard
         </button>
-        <button className="btn good grow" onClick={() => setConfirmEnd('finish')} disabled={!!live.cardio}>
+        <button className="btn good grow" onClick={() => setConfirmEnd('finish')} disabled={!!live.cardio || sessionSets.length === 0}>
           Finish session
         </button>
       </div>
+      {sessionSets.length === 0 && !live.cardio && <p className="small muted">Log at least one set or a run to finish. Even one set counts!</p>}
 
       {confirmEnd && (
         <Sheet onClose={() => setConfirmEnd(null)}>
@@ -250,7 +268,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
               Back
             </button>
             {confirmEnd === 'finish' ? (
-              <button className="btn good grow" onClick={finish}>
+              <button className="btn good grow" onClick={finish} disabled={busy}>
                 Finish
               </button>
             ) : (
@@ -417,7 +435,12 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
         ))}
       </div>
       <div className="row">
-        <button className="btn ghost" onClick={() => cancelCardio(session.id)}>
+        <button
+          className="btn ghost"
+          onClick={() => {
+            if (confirm(`Cancel this ${ex.name.toLowerCase()}? Its time will not be saved.`)) void cancelCardio(session.id);
+          }}
+        >
           Cancel
         </button>
         <button

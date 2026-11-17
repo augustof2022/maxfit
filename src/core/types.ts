@@ -65,7 +65,7 @@ export interface Profile {
   id: 'me';
   name: string;
   heightCm: number | null;
-  xp: number;
+  /** Never re-lock. Merged as a union when syncing so no device loses an unlock. */
   unlocked: string[];
   cosmetics: string[];
   color: string;

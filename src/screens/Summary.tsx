@@ -33,6 +33,7 @@ export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void
           <b>🔥 {s.streak}</b>
         </div>
       </div>
+      {s.trimmed && <p className="small banner">This session was left open, so it ended 1 minute after your last activity.</p>}
       <p className="small muted">{s.habitMet ? `Daily goal met. Tomorrow's goal: ${s.habitTargetMin} min.` : `Daily goal: ${s.habitTargetMin} min. Every minute counts toward it.`}</p>
 
       {prs.length > 0 && (

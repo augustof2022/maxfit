@@ -11,3 +11,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-17: The balance sim caught 3 problems the unit tests missed (goal grew 10→45 min in 25 days; 3 unlocks on one day; casual users locked out of streak-only moves). Run it on every ladder/XP change.
 - 2026-11-17: Agent files created mid-session cannot be called as subagent types until the next session. Use general-purpose: "read <agent file> and act as that agent".
 - 2026-11-17: Renz's Supabase project is shared with a notes app. Ask before applying migrations; prefix MaxFit objects with maxfit_.
+- 2026-11-17: First code review found 10 issues (5 in sync) that 27 unit + 16 e2e tests missed. Always run code-reviewer before calling a feature done, and add tests for every finding.
