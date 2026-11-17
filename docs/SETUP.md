@@ -27,8 +27,7 @@ npm run dev        # open the printed link; on a phone on the same Wi-Fi: npm ru
 
 A new APK is posted there automatically after every push. To build one by hand:
 GitHub → **Actions** → **Android APK** (left list) → **Run workflow** → in "Use workflow from" pick
-**`ccr-d4bfa360-fifsg2`** (the app branch; `main` only has a README until the PR is merged) →
-green **Run workflow**. Wait about 2–3 minutes for the green tick, then use the link above.
+**`main`** → green **Run workflow**. Wait about 2–3 minutes for the green tick, then use the link above.
 
 **Other way (computer):** open the finished run → scroll to the bottom → **Artifacts** →
 **maxfit-debug-apk** (a .zip; unzip it to get the .apk). The Artifacts box often does not show
