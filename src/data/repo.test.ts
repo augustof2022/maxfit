@@ -98,8 +98,10 @@ describe('equipment library', () => {
     const b = await addEquipment('  hip ABDUCTOR machine ', 'machines');
     expect(a).toBe(b);
     expect(a.startsWith('custom-')).toBe(true);
+    await db.locations.update('gym', { equipment: ['dumbbell', a] });
     await deleteEquipment(a);
     expect((await db.equipment.get(a))!.deleted).toBe(true);
+    expect((await db.locations.get('gym'))!.equipment).toEqual(['dumbbell']);
     await expect(deleteEquipment('dumbbell')).rejects.toThrow(/Built-in/);
   });
   it('an old backup without an equipment list still restores', async () => {

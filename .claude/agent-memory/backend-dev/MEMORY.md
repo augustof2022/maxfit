@@ -6,3 +6,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-17: Pull cursor uses server_updated_at (server clock) to avoid phone clock drift; merge uses client updated_at (last-write-wins).
 - 2026-11-17 (code review): seed rows must have updatedAt 0 + fixed ids; pull before push; server upsert only replaces older rows (maxfit_push RPC); page pulls by unique seq, not timestamp; derive XP from sessions; union unlocks.
 - 2026-11-17: Check Supabase SQL locally with PGlite (+ a stub auth schema and authenticated role) before asking to apply it.
+- 2026-11-17: Adding a sync table needs a pull-cursor reset in the Dexie upgrade; deleting a library item must also clean the places that reference it.

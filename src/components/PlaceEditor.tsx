@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CATEGORIES, PRESETS, libraryOf } from '../core/equipment';
+import { CATEGORIES, PRESETS, knownEquipment, libraryOf } from '../core/equipment';
 import { EXERCISES } from '../core/exercises';
 import { fitsEquipment } from '../core/rules';
 import type { EquipmentCategory, EquipmentItem, Location } from '../core/types';
@@ -21,7 +21,7 @@ interface Props {
 export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose }: Props) {
   const [name, setName] = useState(loc.name ?? '');
   const [kind, setKind] = useState<Location['kind']>(loc.kind ?? 'gym');
-  const [eq, setEq] = useState<string[]>(loc.equipment ?? []);
+  const [eq, setEq] = useState<string[]>(() => knownEquipment(loc.equipment ?? [], customEquipment));
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -38,11 +38,26 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
   const doableNow = doable.filter((e) => unlocked.includes(e.id));
 
   const addNew = async () => {
-    const id = await addEquipment(newName, newCat);
-    setEq((cur) => (cur.includes(id) ? cur : [...cur, id]));
-    setNewName('');
-    setAdding(false);
-    setQuery('');
+    if (busy) return;
+    setBusy(true);
+    try {
+      const id = await addEquipment(newName, newCat);
+      setEq((cur) => (cur.includes(id) ? cur : [...cur, id]));
+      setNewName('');
+      setAdding(false);
+      setQuery('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Quick-fill: "Bodyweight only" clears (after asking); the others ADD to what is picked.
+  const quickFill = (preset: (typeof PRESETS)[number]) => {
+    if (preset.equipment.length === 0) {
+      if (eq.length === 0 || confirm('Clear all equipment for this place?')) setEq([]);
+      return;
+    }
+    setEq((cur) => [...new Set([...cur, ...preset.equipment])]);
   };
 
   const save = async () => {
@@ -77,7 +92,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
       </div>
       <div className="row wrap" aria-label="Quick fill">
         {PRESETS.map((p) => (
-          <button key={p.id} className="chip" onClick={() => setEq([...p.equipment])}>
+          <button key={p.id} className="chip" onClick={() => quickFill(p)}>
             {p.name}
           </button>
         ))}
@@ -119,7 +134,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
             <button className="btn ghost grow" onClick={() => setAdding(false)}>
               Cancel
             </button>
-            <button className="btn primary grow" disabled={!newName.trim()} onClick={addNew}>
+            <button className="btn primary grow" disabled={!newName.trim() || busy} onClick={addNew}>
               Add + select
             </button>
           </div>

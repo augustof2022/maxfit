@@ -104,7 +104,13 @@ export async function addEquipment(name: string, category: EquipmentCategory): P
 /** Remove one of the user's own items from the library (soft delete, so it syncs). */
 export async function deleteEquipment(id: string): Promise<void> {
   if (!id.startsWith('custom-')) throw new Error('Built-in equipment cannot be deleted.');
-  await db.equipment.update(id, { deleted: true, updatedAt: Date.now() });
+  const now = Date.now();
+  // Also take it out of every place that has it, so no place keeps a dead id.
+  await db.transaction('rw', db.equipment, db.locations, async () => {
+    await db.equipment.update(id, { deleted: true, updatedAt: now });
+    const places = (await db.locations.toArray()).filter((l) => l.equipment.includes(id));
+    await db.locations.bulkPut(places.map((l) => ({ ...l, equipment: l.equipment.filter((x) => x !== id), updatedAt: now })));
+  });
 }
 
 export async function equipmentFor(locationId: string | null): Promise<EquipmentId[]> {

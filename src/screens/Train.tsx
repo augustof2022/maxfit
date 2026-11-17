@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../core/exercises';
-import { equipmentName } from '../core/equipment';
+import { equipmentName, knownEquipment } from '../core/equipment';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { cardioTotals, fmtClock, inMode, totals, activeSeconds } from '../core/live';
 import { fmtPace, nextTarget, starterPlan, type ExRecord } from '../core/rules';
@@ -54,7 +54,7 @@ function PreSession({ game }: Props) {
   const [busy, setBusy] = useState(false);
   const loc = d.location;
   const plan = starterPlan(d.available, d.stats.sessions);
-  const eqNames = (loc?.equipment ?? []).map((id) => equipmentName(id, game.customEquipment));
+  const eqNames = knownEquipment(loc?.equipment ?? [], game.customEquipment).map((id) => equipmentName(id, game.customEquipment));
 
   const start = async () => {
     if (busy) return;

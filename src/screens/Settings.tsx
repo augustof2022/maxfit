@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stepper } from '../components/ui';
 import { PlaceEditor } from '../components/PlaceEditor';
-import { CATEGORIES, EQUIPMENT, equipmentName } from '../core/equipment';
+import { CATEGORIES, EQUIPMENT, equipmentName, knownEquipment } from '../core/equipment';
 import type { Location } from '../core/types';
 import { deleteEquipment, exportAll, importAll, updateProfile, updateSettings, wipeLocal } from '../data/repo';
 import type { Game } from '../data/useGame';
@@ -37,7 +37,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         </div>
         <p className="small muted">Name a place and pick its equipment once. When you train there, MaxFit loads it and shows only exercises you can do.</p>
         {game.locations.map((l) => {
-          const names = l.equipment.map((id) => equipmentName(id, game.customEquipment));
+          const names = knownEquipment(l.equipment, game.customEquipment).map((id) => equipmentName(id, game.customEquipment));
           return (
             <button key={l.id} className="card flat row between" style={{ textAlign: 'left' }} onClick={() => setEditing(l)}>
               <span className="grow">
@@ -68,10 +68,10 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
                 </span>
                 <button
                   className="btn ghost"
-                  style={{ minHeight: 32, padding: '4px 10px' }}
+                  style={{ minWidth: 44, padding: '4px 10px' }}
                   aria-label={`Remove ${e.name} from library`}
                   onClick={async () => {
-                    if (confirm(`Remove "${e.name}" from your library? Places that have it will no longer list it.`)) await deleteEquipment(e.id);
+                    if (confirm(`Remove "${e.name}" from your library? It is also removed from every place that has it.`)) await deleteEquipment(e.id);
                   }}
                 >
                   ✕

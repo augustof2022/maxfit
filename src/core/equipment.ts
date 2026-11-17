@@ -74,6 +74,11 @@ export function libraryOf(custom: EquipmentItem[]): EquipmentItem[] {
   );
 }
 
+/** Ids that still exist in the library (drops deleted custom items). */
+export function knownEquipment(ids: string[], custom: EquipmentItem[] = []): string[] {
+  return ids.filter((id) => EQUIPMENT_BY_ID[id] || custom.some((c) => c.id === id && !c.deleted));
+}
+
 export function equipmentName(id: string, custom: EquipmentItem[] = []): string {
   return EQUIPMENT_BY_ID[id]?.name ?? custom.find((c) => c.id === id && !c.deleted)?.name ?? id.replace(/_/g, ' ');
 }

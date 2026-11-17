@@ -11,6 +11,10 @@ description: Change MaxFit's stored data safely - Dexie (phone) schema versions,
    check constraint in a NEW migration file `supabase/migrations/<timestamp>_<name>.sql`.
 3. **Supabase:** migrations are additive and idempotent (`if not exists`). RLS on, four policies
    with `(select auth.uid()) = user_id`. Prefix objects with `maxfit_` (shared project).
+   **Once a migration file has been applied anywhere, never edit it:** add a new file. Apply the
+   SQL to the server BEFORE shipping an app build that pushes the new table.
+   New sync table → also reset the pull cursor in the Dexie upgrade (`meta`: `pullSeq`, `pullTime`)
+   so rows an older app skipped are pulled again.
 4. **Apply:** ask Renz first. Then apply with the Supabase MCP `apply_migration`, and run
    `get_advisors` (security and performance). Report any warnings with their links.
 5. **Never:** service_role key in the app or repo; hard deletes of user rows (use `deleted: true`).

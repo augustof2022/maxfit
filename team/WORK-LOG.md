@@ -17,3 +17,4 @@
 - `main` branch created; draft PR #1 opened. New Supabase project to come from Renz. WHO BMI kept. Fair-play rules kept.
 - Equipment library: places start with a name; 37 built-in items in 5 groups; search; quick-fill; add your own (synced, backups include them); live "exercises possible here". "+ New place" on Train too.
 - Checks: 49 unit tests; e2e 20/20.
+- Review of equipment library (code-reviewer, high): no data loss on v1→v2; fixed: deleted item cleaned from places, pull cursor reset on upgrade, double-tap guard, quick-fill adds instead of replacing, 44px touch target. Migration edit OK (never applied); rule added to sync-schema-change skill.
