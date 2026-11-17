@@ -1,0 +1,205 @@
+import { describe, expect, it } from 'vitest';
+import { EXERCISES, EXERCISE_BY_ID } from './exercises';
+import {
+  availableExercises,
+  bmi,
+  bmiCategory,
+  buildStats,
+  challengeMet,
+  computeRecords,
+  currentStreak,
+  dayKey,
+  habitTarget,
+  levelFromXp,
+  newUnlocks,
+  nextTarget,
+  openChest,
+  ruleMet,
+  sessionXp,
+  starterPlan,
+  xpForLevel,
+} from './rules';
+import type { Session, WorkSet } from './types';
+
+const DAY = 86_400_000;
+const T0 = new Date(2026, 10, 1, 18, 0, 0).getTime(); // 1 Nov 2026, 6 PM local
+
+let n = 0;
+function session(dayOffset: number, minutes = 15): Session {
+  return {
+    id: `s${n++}`,
+    startedAt: T0 + dayOffset * DAY,
+    endedAt: T0 + dayOffset * DAY + minutes * 60_000,
+    locationId: null,
+    status: 'done',
+    activeSec: minutes * 45,
+    restSec: minutes * 15,
+    xpEarned: 0,
+    prs: 0,
+    live: null,
+    updatedAt: 0,
+  };
+}
+function set(exerciseId: string, v: Partial<WorkSet>, at = T0): WorkSet {
+  return { id: `w${n++}`, sessionId: 's', exerciseId, at, isPR: false, updatedAt: 0, ...v };
+}
+
+describe('catalog', () => {
+  it('starts with only push-up and run', () => {
+    const st = buildStats([], [], 0, T0);
+    expect(newUnlocks([], st).sort()).toEqual(['push_up', 'run']);
+  });
+  it('every record rule points to a real exercise that unlocks earlier', () => {
+    const check = (r: any, tier: number) => {
+      if (r.type === 'record') {
+        expect(EXERCISE_BY_ID[r.exerciseId], r.exerciseId).toBeDefined();
+        expect(EXERCISE_BY_ID[r.exerciseId].tier).toBeLessThanOrEqual(tier);
+      }
+      if (r.type === 'all' || r.type === 'any') r.rules.forEach((x: any) => check(x, tier));
+    };
+    EXERCISES.forEach((e) => check(e.unlock, e.tier));
+  });
+  it('ids are unique', () => {
+    expect(new Set(EXERCISES.map((e) => e.id)).size).toBe(EXERCISES.length);
+  });
+});
+
+describe('streak', () => {
+  it('counts consecutive days and survives until the end of the next day', () => {
+    const s = [session(0), session(1), session(2)];
+    expect(currentStreak(s, T0 + 2 * DAY)).toBe(3);
+    expect(currentStreak(s, T0 + 3 * DAY)).toBe(3);
+    expect(currentStreak(s, T0 + 4 * DAY)).toBe(0);
+  });
+  it('two sessions on one day count once', () => {
+    expect(currentStreak([session(0), session(0)], T0)).toBe(1);
+  });
+});
+
+describe('unlock ladder (Boss R example: 2 days in a row unlocks a new exercise)', () => {
+  it('2-day streak unlocks squat', () => {
+    const st = buildStats([session(0), session(1)], [], 0, T0 + DAY);
+    expect(newUnlocks(['push_up', 'run'], st)).toContain('squat');
+  });
+  it('beating a push-up record of 12 unlocks plank', () => {
+    const st = buildStats([session(0)], [set('push_up', { reps: 12 })], 0, T0);
+    expect(newUnlocks(['push_up', 'run'], st)).toContain('plank');
+  });
+  it('"all" rules need every part', () => {
+    const bench = EXERCISE_BY_ID.bench_press.unlock;
+    const many = Array.from({ length: 15 }, (_, i) => session(i * 3));
+    expect(ruleMet(bench, buildStats(many, [], 0, T0))).toBe(false);
+    expect(ruleMet(bench, buildStats(many, [set('push_up', { reps: 15 })], 0, T0))).toBe(true);
+  });
+  it('"any" rules: a 3-day-a-week user still unlocks sit-up by session count', () => {
+    const sitUp = EXERCISE_BY_ID.sit_up.unlock;
+    const spaced = Array.from({ length: 7 }, (_, i) => session(i * 2));
+    expect(ruleMet(sitUp, buildStats(spaced.slice(0, 6), [], 0, T0 + 12 * DAY))).toBe(false);
+    expect(ruleMet(sitUp, buildStats(spaced, [], 0, T0 + 12 * DAY))).toBe(true);
+  });
+  it('secret exercises never unlock by rules', () => {
+    const many = Array.from({ length: 60 }, (_, i) => session(i));
+    const st = buildStats(many, [], 1_000_000, T0 + 59 * DAY);
+    expect(newUnlocks([], st)).not.toContain('bear_crawl');
+  });
+});
+
+describe('equipment', () => {
+  it('home with no equipment hides dumbbell moves', () => {
+    const ids = availableExercises(['push_up', 'db_curl'], []).map((e) => e.id);
+    expect(ids).toEqual(['push_up']);
+  });
+  it('gym with dumbbells shows them', () => {
+    const ids = availableExercises(['push_up', 'db_curl'], ['dumbbell']).map((e) => e.id);
+    expect(ids).toContain('db_curl');
+  });
+});
+
+describe('records and targets', () => {
+  it('reps: beat the best by one', () => {
+    const recs = computeRecords([set('push_up', { reps: 10 }, T0), set('push_up', { reps: 8 }, T0 + 1)]);
+    const r = recs.get('push_up')!;
+    expect(r.best).toBe(10);
+    expect(r.last?.reps).toBe(8);
+    expect(nextTarget(EXERCISE_BY_ID.push_up, r).reps).toBe(11);
+  });
+  it('weight: add reps to 12, then add 2.5 kg and drop to 8', () => {
+    const ex = EXERCISE_BY_ID.db_curl;
+    let r = computeRecords([set('db_curl', { weightKg: 10, reps: 9 })]).get('db_curl');
+    expect(nextTarget(ex, r)).toMatchObject({ weightKg: 10, reps: 10 });
+    r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 })]).get('db_curl');
+    expect(nextTarget(ex, r)).toMatchObject({ weightKg: 12.5, reps: 8 });
+  });
+  it('weight: heavier beats lighter even with fewer reps', () => {
+    const r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 }, 1), set('db_curl', { weightKg: 12.5, reps: 6 }, 2)]).get('db_curl')!;
+    expect(r.best).toBe(12.5);
+  });
+  it('distance: tracks best km and best pace', () => {
+    const r = computeRecords([set('run', { distanceKm: 2, durationSec: 840 }), set('run', { distanceKm: 1, durationSec: 360 }, T0 + 1)]).get('run')!;
+    expect(r.best).toBe(2);
+    expect(r.bestPace).toBe(6);
+  });
+});
+
+describe('xp and levels', () => {
+  it('level thresholds', () => {
+    expect(xpForLevel(2)).toBe(200);
+    expect(levelFromXp(0)).toBe(1);
+    expect(levelFromXp(199)).toBe(1);
+    expect(levelFromXp(200)).toBe(2);
+    expect(levelFromXp(9000)).toBe(10);
+  });
+  it('session xp adds parts and caps the streak bonus', () => {
+    expect(sessionXp({ sets: 4, prs: 1, activeSec: 600, streak: 20, habitMet: true })).toBe(40 + 25 + 20 + 10 + 50 + 30);
+  });
+});
+
+describe('habit builder', () => {
+  it('starts at 10 minutes and grows by 5 after 5 met days', () => {
+    expect(habitTarget([])).toBe(10);
+    expect(habitTarget([0, 1, 2, 3].map((d) => session(d, 12)))).toBe(10);
+    expect(habitTarget([0, 1, 2, 3, 4].map((d) => session(d, 12)))).toBe(15);
+  });
+  it('rest days do not reset the count; a missed week does', () => {
+    expect(habitTarget([0, 2, 4, 7, 9].map((d) => session(d, 12)))).toBe(15);
+    expect(habitTarget([0, 1, 10, 11, 12].map((d) => session(d, 12)))).toBe(10);
+  });
+  it('days under the goal do not count', () => {
+    expect(habitTarget([0, 1, 2, 3, 4].map((d) => session(d, 8)))).toBe(10);
+  });
+  it('starter plan is short: max 3 exercises', () => {
+    const avail = availableExercises(['push_up', 'run', 'squat', 'plank', 'sit_up'], []);
+    expect(starterPlan(avail, 0).length).toBe(3);
+    expect(starterPlan(avail, 10)).toEqual([]);
+  });
+  it('day keys use the phone time zone', () => {
+    expect(dayKey(T0)).toBe('2026-11-01');
+  });
+});
+
+describe('bmi', () => {
+  it('computes and classifies (WHO cut-offs)', () => {
+    expect(bmi(70, 170)).toBe(24.2);
+    expect(bmiCategory(18.4)).toBe('Underweight');
+    expect(bmiCategory(24.9)).toBe('Normal');
+    expect(bmiCategory(25)).toBe('Overweight');
+    expect(bmiCategory(30)).toBe('Obese');
+  });
+});
+
+describe('mystery chest', () => {
+  it('is deterministic for the same seed', () => {
+    const ctx = { unlocked: ['push_up'], cosmetics: [], hadPR: false, records: new Map(), available: [] };
+    expect(openChest('abc', ctx)).toEqual(openChest('abc', ctx));
+  });
+  it('gives every kind of reward across many seeds', () => {
+    const records = computeRecords([set('push_up', { reps: 10 })]);
+    const ctx = { unlocked: ['push_up'], cosmetics: [], hadPR: true, records, available: [EXERCISE_BY_ID.push_up] };
+    const kinds = new Set(Array.from({ length: 300 }, (_, i) => openChest(`seed${i}`, ctx).kind));
+    expect([...kinds].sort()).toEqual(['challenge', 'color', 'secret', 'xp']);
+  });
+  it('challenge is met by a set at or above target', () => {
+    expect(challengeMet({ exerciseId: 'push_up', target: 12, xp: 100 }, [set('push_up', { reps: 12 })])).toBe(true);
+    expect(challengeMet({ exerciseId: 'push_up', target: 12, xp: 100 }, [set('push_up', { reps: 11 })])).toBe(false);
+  });
+});
