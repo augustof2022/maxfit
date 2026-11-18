@@ -27,3 +27,8 @@
 - Hidden surprises; goals + focus; animated avatar in 3 styles; liquid progress bars, count-up numbers, screen ease-in.
 - Progress photos: 3 looks, story/post sizes, save to gallery, share sheet, timeline + compare; phone only.
 - Checks: typecheck clean; 64 unit tests; e2e 29/29; balance steady/casual/home run (results in GAME-DESIGN.md).
+- Review (code-reviewer, high): pass with fixes. Fixed: session edit refuses NaN dates / negative minutes and re-checks records when moved;
+  "Delete test data" stamps resetAt so sync cannot bring old unlocks/colours back; photo-loss warnings (erase, reinstall);
+  update URL parsed and checked (host, path, no ".."); Summary uses the user's measures; "Use default" asks first.
+  Open for Renz: Q19 (cardio pace), and old unlocks may re-lock under the new ladder (finding 6).
+- CI: apk job green on the first push (the new Java compiles). Release signing path untested until the secrets are added.

@@ -62,7 +62,7 @@ movement, so strength comes before the harder move. Exercise order to be confirm
 ## Records and "beat this"
 
 See `.claude/skills/progressive-overload/SKILL.md`. Reps +1, holds +5 s, weights by double
-progression (8→12 reps, then +2.5 kg), distance +0.1 km or a faster pace.
+progression (8→12 reps, then +2.5 kg), distance +0.1 km (same or more time). Note: with rule A and raw time, a faster run over the same distance is not a record and a slower one is — open question Q19 (pace) for Renz.
 
 ## XP and levels
 

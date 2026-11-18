@@ -303,7 +303,9 @@ export const deleteSession = discardSession;
 
 /** Correct a finished session: its date and start time, minutes and place. */
 export async function updateSession(id: string, patch: { startedAt?: number; activeSec?: number; restSec?: number; locationId?: string | null }): Promise<void> {
-  await db.transaction('rw', db.sessions, db.sets, async () => {
+  if (patch.startedAt !== undefined && (!Number.isFinite(patch.startedAt) || patch.startedAt > Date.now() + 60_000)) throw new Error('Pick a real date and time, not in the future.');
+  for (const v of [patch.activeSec, patch.restSec]) if (v !== undefined && (!Number.isFinite(v) || v < 0)) throw new Error('Minutes cannot be below 0.');
+  await db.transaction('rw', db.profile, db.sessions, db.sets, async () => {
     const s = await db.sessions.get(id);
     if (!s || s.deleted) throw new Error('This session no longer exists.');
     if (s.status !== 'done') throw new Error('Finish the session before editing it.');
@@ -316,6 +318,8 @@ export async function updateSession(id: string, patch: { startedAt?: number; act
     if (shift) {
       const sets = (await db.sets.where('sessionId').equals(id).toArray()).filter((x) => !x.deleted);
       await db.sets.bulkPut(sets.map((x) => ({ ...x, at: x.at + shift, updatedAt: now })));
+      // The order of sets changed, so which ones are records may change too.
+      await reconcileRecords([...new Set(sets.map((x) => x.exerciseId))]);
     }
   });
 }
@@ -536,7 +540,7 @@ export async function resetTrainingData(): Promise<void> {
       const rows = ((await (table as any).toArray()) as { id: string; deleted?: boolean }[]).filter((r) => !r.deleted);
       await (table as any).bulkPut(rows.map((r) => ({ ...r, deleted: true, ...(table === db.sessions ? { status: 'done', live: null } : {}), updatedAt: now })));
     }
-    await db.profile.update('me', { unlocked: [...STARTER_IDS], cosmetics: ['ember'], color: 'ember', challenge: null, updatedAt: now });
+    await db.profile.update('me', { unlocked: [...STARTER_IDS], cosmetics: ['ember'], color: 'ember', challenge: null, resetAt: now, updatedAt: now });
   });
 }
 

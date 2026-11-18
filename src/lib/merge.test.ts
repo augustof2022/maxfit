@@ -28,4 +28,16 @@ describe('sync merge', () => {
     const remote = { id: 'me', updatedAt: 200, unlocked: ['push_up'], cosmetics: ['ember'] };
     expect(mergeRow('profile', local, remote)).toBeNull();
   });
+  it('a reset on one device is not undone by an older copy from another device', () => {
+    const local = { id: 'me', updatedAt: 500, resetAt: 500, unlocked: ['push_up'], cosmetics: ['ember'] };
+    const remote = { id: 'me', updatedAt: 400, unlocked: ['push_up', 'wall_sit'], cosmetics: ['ember', 'gold'] };
+    expect(mergeRow('profile', local, remote, 999)).toBeNull();
+    const pulled = mergeRow('profile', remote, local, 999)!;
+    expect(pulled.unlocked).toEqual(['push_up']);
+    expect(pulled.cosmetics).toEqual(['ember']);
+    // Remote changed later (name) but before-reset lists: keep its name, take the reset lists.
+    const later = { ...remote, updatedAt: 600, name: 'Renz' };
+    const m = mergeRow('profile', local, later, 999)!;
+    expect(m).toMatchObject({ name: 'Renz', unlocked: ['push_up'], cosmetics: ['ember'], resetAt: 500, updatedAt: 999 });
+  });
 });

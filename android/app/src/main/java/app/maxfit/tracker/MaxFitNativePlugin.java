@@ -39,7 +39,16 @@ import java.net.URL;
 public class MaxFitNativePlugin extends Plugin {
 
     /** Only MaxFit's own release files may be downloaded and installed. */
-    private static final String RELEASE_PREFIX = "https://github.com/augustof2022/maxfit/releases/download/";
+    private static final String RELEASE_PATH = "/augustof2022/maxfit/releases/download/";
+
+    static boolean isOwnRelease(String url) {
+        if (url == null) return false;
+        Uri u = Uri.parse(url);
+        String path = u.getPath();
+        return "https".equals(u.getScheme()) && "github.com".equals(u.getHost()) && u.getPort() == -1
+            && u.getUserInfo() == null && path != null && path.startsWith(RELEASE_PATH)
+            && !path.contains("..") && !url.contains("%2e") && !url.contains("%2E") && path.endsWith(".apk");
+    }
 
     @PluginMethod
     public void getAppInfo(PluginCall call) {
@@ -58,7 +67,7 @@ public class MaxFitNativePlugin extends Plugin {
     @PluginMethod
     public void downloadAndInstall(PluginCall call) {
         final String url = call.getString("url");
-        if (url == null || !url.startsWith(RELEASE_PREFIX)) {
+        if (!isOwnRelease(url)) {
             call.reject("Only MaxFit's own release file can be installed.");
             return;
         }

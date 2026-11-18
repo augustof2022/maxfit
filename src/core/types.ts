@@ -95,6 +95,8 @@ export interface Profile {
   /** The user's own choice of measures per exercise id. */
   exerciseMeasures?: Record<string, Measure[]>;
   avatarStyle?: AvatarStyle;
+  /** When "Delete test data" last ran; sync uses it so old copies do not bring progress back. */
+  resetAt?: number;
   updatedAt: number;
 }
 

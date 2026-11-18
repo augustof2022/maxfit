@@ -35,7 +35,15 @@ export function MeasureSheet({ ex, current, onClose }: { ex: Exercise; current: 
       </div>
       <p className="tiny muted">Default: {ex.measures.map((m) => MEASURES.find((x) => x.id === m)!.label).join(' + ')}. Unlock goals always use the default.</p>
       <div className="row">
-        <button className="btn ghost grow" onClick={() => setExerciseMeasures(ex.id, []).then(onClose)} disabled={same && current.join() === ex.measures.join()}>
+        <button
+          className="btn ghost grow"
+          onClick={async () => {
+            if (!(await confirmAsk({ title: `Measure ${ex.name} the default way again?`, body: 'Your records for this exercise are checked again.', ok: 'Use default' }))) return;
+            await setExerciseMeasures(ex.id, []);
+            onClose();
+          }}
+          disabled={current.join() === ex.measures.join()}
+        >
           Use default
         </button>
         <button className="btn primary grow" onClick={save} disabled={pick.length === 0 || same}>

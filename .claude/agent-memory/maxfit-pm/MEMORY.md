@@ -15,3 +15,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-18: Balance sim with a "dumb rotation" user hid record-gated moves forever; a sim user that follows the unlock hints is the realistic test. Keep both in mind.
 - 2026-11-18: Background research agent + coding in parallel saved the most time; give it a strict output table format so it converts straight into exercises.ts.
 - 2026-11-18: Debug APKs built in CI get a new random key each run, so they can never update each other. Any update feature needs a fixed key in secrets first.
+- 2026-11-18: When a stored list becomes derived (unlocks), check the sync merge too: a union merge silently undoes resets.

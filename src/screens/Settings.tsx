@@ -241,11 +241,11 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
       <section className="card stack" aria-label="Erase">
         <h2>Erase this device</h2>
-        <p className="small muted">Removes all MaxFit data from this phone (cloud data stays). Use before someone else signs in here. Export a backup first.</p>
+        <p className="small muted">Removes all MaxFit data from this phone (cloud data stays). Progress photos are only on this phone and are deleted for good: save the ones you want to your gallery first. Use before someone else signs in here. Export a backup first.</p>
         <button
           className="btn danger"
           onClick={async () => {
-            if (!(await confirmAsk({ title: 'Erase ALL MaxFit data on this device?', body: 'This cannot be undone. Cloud data stays.', ok: 'Erase', danger: true }))) return;
+            if (!(await confirmAsk({ title: 'Erase ALL MaxFit data on this device?', body: 'This cannot be undone. Cloud data stays, but progress photos (phone only) are deleted for good.', ok: 'Erase', danger: true }))) return;
             await wipeLocal();
             toast('This device was erased');
           }}

@@ -69,7 +69,7 @@ export function PhotoJournal({ game }: { game: Game }) {
         <h2>Progress photos</h2>
         <span className="tiny muted">On this phone only</span>
       </div>
-      <p className="small muted">Take a photo, put your stats on it, then save or share it as a story or post. Each one is kept here so you can see your change.</p>
+      <p className="small muted">Take a photo, put your stats on it, then save or share it as a story or post. Each one is kept here so you can see your change. They are not in the cloud or in backups: tap Save to keep a copy in your gallery.</p>
       <div className="row">
         <button className="btn primary grow" onClick={() => pick(true)}>
           📷 Take photo

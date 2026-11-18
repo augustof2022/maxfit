@@ -156,6 +156,18 @@ describe('edit and delete (Renz, 2026-11-18)', () => {
     expect(set.at).toBeLessThan(a.session.startedAt - day + 60_000);
   });
 
+  it('a broken date or negative minutes are refused', async () => {
+    const { a } = await twoSessions();
+    await expect(updateSession(a.session.id, { startedAt: NaN })).rejects.toThrow(/real date/);
+    await expect(updateSession(a.session.id, { activeSec: -60 })).rejects.toThrow(/below 0/);
+  });
+
+  it('moving a session earlier re-checks records (the later set becomes the first, not a record)', async () => {
+    const { a, b, prSet } = await twoSessions();
+    await updateSession(b.session.id, { startedAt: a.session.startedAt - 86_400_000 });
+    expect((await db.sets.get(prSet.id))!.isPR).toBe(false);
+  });
+
   it('changing the measure re-checks records', async () => {
     const s = await startSession('home');
     await logSet(s.id, 'push_up', { reps: 8, seconds: 30 });

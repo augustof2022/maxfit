@@ -4,10 +4,10 @@ import { CountUp, Sheet } from '../components/ui';
 import { EXERCISE_BY_ID } from '../core/exercises';
 import { fmtClock } from '../core/live';
 import { fmtValues, mainMeasure } from '../core/measures';
-import { AVATAR_STAGES, avatarStage, COLORS } from '../core/rules';
+import { AVATAR_STAGES, avatarStage, COLORS, type MeasuresOf } from '../core/rules';
 import type { SessionSummary } from '../data/repo';
 
-export function Summary({ s, onClose, avatarStyle }: { s: SessionSummary; onClose: () => void; avatarStyle?: 'athlete' | 'line' | 'buddy' }) {
+export function Summary({ s, onClose, avatarStyle, measuresOf }: { s: SessionSummary; onClose: () => void; avatarStyle?: 'athlete' | 'line' | 'buddy'; measuresOf?: MeasuresOf }) {
   const [chestOpen, setChestOpen] = useState(false);
   const stageBefore = avatarStage(s.levelBefore);
   const stageAfter = avatarStage(s.levelAfter);
@@ -42,7 +42,7 @@ export function Summary({ s, onClose, avatarStyle }: { s: SessionSummary; onClos
           <h2>🏆 New records</h2>
           {prs.map((x) => (
             <span key={x.id} className="pop">
-              {EXERCISE_BY_ID[x.exerciseId]?.name}: {fmtValues(EXERCISE_BY_ID[x.exerciseId]?.measures ?? ['reps'], x)}
+              {EXERCISE_BY_ID[x.exerciseId]?.name}: {EXERCISE_BY_ID[x.exerciseId] ? fmtValues(measuresOf ? measuresOf(EXERCISE_BY_ID[x.exerciseId]) : EXERCISE_BY_ID[x.exerciseId].measures, x) : ''}
             </span>
           ))}
         </div>

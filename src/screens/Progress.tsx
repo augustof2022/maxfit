@@ -193,9 +193,17 @@ function EditSessionSheet({ game, s, onClose }: { game: Game; s: Session; onClos
     const [y, m, dd] = date.split('-').map(Number);
     const [hh, mm] = time.split(':').map(Number);
     const startedAt = new Date(y, m - 1, dd, hh, mm).getTime();
+    if (!Number.isFinite(startedAt) || active < 0 || rest < 0) {
+      await confirmAsk({ title: 'Check the date, time and minutes', body: 'Pick a date and a start time; minutes cannot be below 0.', ok: 'OK' });
+      return;
+    }
     if (!(await confirmAsk({ title: 'Save changes to this session?', body: 'Streaks, the daily goal and records follow the new date and minutes.', ok: 'Save' }))) return;
-    await updateSession(s.id, { startedAt, activeSec: Math.round(active * 60), restSec: Math.round(rest * 60), locationId: loc });
-    onClose();
+    try {
+      await updateSession(s.id, { startedAt, activeSec: Math.round(active * 60), restSec: Math.round(rest * 60), locationId: loc });
+      onClose();
+    } catch (e) {
+      await confirmAsk({ title: 'Not saved', body: (e as Error).message, ok: 'OK' });
+    }
   };
   const remove = async () => {
     if (!(await confirmAsk({ title: 'Delete this session?', body: `It has ${sets} sets and +${s.xpEarned} XP. Everything goes, and anything only it unlocked locks again.`, ok: 'Delete', danger: true }))) return;

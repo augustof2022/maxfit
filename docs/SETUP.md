@@ -48,7 +48,9 @@ kept only in GitHub **secrets** (never in the code).
 
 **First install with the new key (one time):** the app on your phone was signed with an old
 random key, so Android cannot update it. Uninstall it once, then install the new one.
-- Uninstalling deletes the data on the phone. To keep it: set up cloud sync first, build, install,
+- Uninstalling deletes the data on the phone, **including progress photos** (they are never in the cloud
+  or in backups). Save the photos you want to the gallery first (Body → photo → Save).
+- Training data: To keep it: set up cloud sync first, build, install,
   sign in; or use **Settings → Backup → Export** in the new app later. (The old app's Export may
   not save a file on Android; that is fixed in the new version.)
 

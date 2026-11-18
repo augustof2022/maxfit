@@ -99,6 +99,7 @@ export default function App() {
         <Summary
           s={summary}
           avatarStyle={game.profile.avatarStyle}
+          measuresOf={game.d.measuresOf}
           onClose={() => {
             setSummary(null);
             setTab('home');
