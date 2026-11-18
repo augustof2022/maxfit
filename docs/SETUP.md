@@ -20,13 +20,18 @@ Progress photos are **never** uploaded (Renz, 2026-11-18): they stay on the phon
    user read and write only their own rows.)
 4. Left menu → **Project Settings** → **API** (may be called **API Keys** / **Data API**). Copy:
    - **Project URL** (looks like `https://abcd.supabase.co`)
-   - the **anon** / **publishable** key (public by design). **Never** copy the `service_role` / secret key.
+   - the **publishable** key (`sb_publishable_...`; public by design). The older `anon` key (`eyJ...`) only works
+     until the end of 2026 [Source: Supabase docs, "Migrating to publishable and secret API keys"].
+     **Never** copy the `service_role` / `sb_secret_...` key.
 5. GitHub → **augustof2022/maxfit** → **Settings** → **Secrets and variables** → **Actions** →
    **Variables** tab → **New repository variable**, two times:
    - `VITE_SUPABASE_URL` = the Project URL
    - `VITE_SUPABASE_ANON_KEY` = the anon / publishable key
-6. Supabase → **Authentication** → **Sign In / Providers** → Email is on by default. If you keep
-   "Confirm email" on: after **Create account** in MaxFit, open the email link, then **Sign in**.
+6. Supabase → **Authentication** → **Sign In / Providers** → **Email**: for a personal app, turn **Confirm email**
+   **off** (simplest). If you keep it on, also set **Authentication → URL Configuration → Site URL** to a real
+   address (for example the web app on GitHub Pages). The default `http://localhost:3000` makes the email link
+   end on "site can't be reached" — the email is confirmed anyway; go back to MaxFit and **Sign in**.
+   Never share that link: it contains a login token. [Source: Supabase docs, "Redirect URLs"]
 7. The next app build has sync. In MaxFit: **Settings → Cloud sync → Create account**.
 
 For the phone app **no file is needed**: the build reads the two GitHub variables. Only to run MaxFit on a
