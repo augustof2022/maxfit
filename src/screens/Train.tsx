@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../core/exercises';
-import { equipmentName, knownEquipment } from '../core/equipment';
+import { knownEquipment } from '../core/equipment';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { cardioTotals, fmtClock, inMode, totals, activeSeconds } from '../core/live';
 import { fmtPace, fmtTarget, GOAL_TARGETS, goalFor, nextTarget, starterPlan, suggestedPlan, type ExRecord } from '../core/rules';
 import { fmtRecord, fmtSet, lastBestText } from '../core/format';
 import { fmtPlanItem, hasTarget } from '../core/plans';
 import { PlansSection } from '../components/Plans';
-import { ExerciseRow, HistorySheet } from '../components/ExerciseHistory';
+import { HistorySheet } from '../components/ExerciseHistory';
+import { Activity, AlarmClock, CirclePlay, ExIcon, Footprints, Pause, Pencil, PersonStanding, PlaceIcon, Play, Plus, Ruler, Square, Timer, TrendingUp } from '../components/Icon';
 import { TimerOverlay } from '../components/TimerOverlay';
 import { ExerciseDemo } from '../components/ExerciseDemo';
-import { fmtLevel, fmtValues, iconFor, isCardioFlow, levelOf } from '../core/measures';
+import { fmtLevel, fmtValues, isCardioFlow, levelOf } from '../core/measures';
 import type { Beat, Exercise, Goal, LiveMode, Measure, PlanItem, Session, Settings, WorkSet } from '../core/types';
 import { cancelCardio, discardSession, finishCardio, finishSession, logSet, restartRest, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
 import { confirmAsk } from '../components/Confirm';
@@ -35,14 +36,14 @@ export function Train(props: Props) {
 function LocationPicker({ game, value, onPick }: { game: Game; value: string | null; onPick: (id: string) => void }) {
   const [adding, setAdding] = useState(false);
   return (
-    <div className="row wrap" role="radiogroup" aria-label="Where are you training?">
+    <div className="chips wrap" role="radiogroup" aria-label="Where are you training?">
       {game.locations.map((l) => (
         <button key={l.id} role="radio" aria-checked={value === l.id} className={`chip ${value === l.id ? 'on' : ''}`} onClick={() => onPick(l.id)}>
-          {l.kind === 'home' ? '🏠' : l.kind === 'gym' ? '🏋️' : l.kind === 'outdoor' ? '🌳' : '📍'} {l.name}
+          <PlaceIcon kind={l.kind} /> {l.name}
         </button>
       ))}
-      <button className="chip" onClick={() => setAdding(true)}>
-        + New place
+      <button className="chip" onClick={() => setAdding(true)} aria-label="+ New place">
+        <Plus size={18} aria-hidden /> Place
       </button>
       {adding && (
         <PlaceEditor
@@ -60,23 +61,17 @@ function LocationPicker({ game, value, onPick }: { game: Game; value: string | n
   );
 }
 
+/**
+ * Train before a session (round 5, Renz): only two things. Where are you today, and your plans there.
+ * No workout without a plan: every place has a default "Starter plan" he can edit, rename or delete.
+ */
 function PreSession({ game, toast }: Props) {
   const d = game.d!;
   const [busy, setBusy] = useState(false);
   const loc = d.location;
-  const goals = game.profile!.goals ?? [];
-  const focus = game.profile!.focus ?? [];
-  const starter = starterPlan(d.available, d.stats.sessions, goals, focus);
-  const plan = starter.length ? starter : goals.length || focus.length ? suggestedPlan(d.available, goals, focus) : [];
-  const eqNames = knownEquipment(loc?.equipment ?? [], game.customEquipment).map((id) => equipmentName(id, game.customEquipment));
+  const eq = knownEquipment(loc?.equipment ?? [], game.customEquipment);
 
-  const [hist, setHist] = useState<Exercise | null>(null);
-  // Exercises done before come first (most recent first), so Last and Best are easy to find.
-  const lastDone = new Map<string, number>();
-  for (const x of d.liveSets) if ((lastDone.get(x.exerciseId) ?? 0) < x.at) lastDone.set(x.exerciseId, x.at);
-  const here = [...d.available].sort((a, b) => (lastDone.get(b.id) ?? 0) - (lastDone.get(a.id) ?? 0));
-
-  const start = async (planId: string | null = null) => {
+  const start = async (planId: string) => {
     if (busy) return;
     setBusy(true);
     primeAudio();
@@ -90,47 +85,20 @@ function PreSession({ game, toast }: Props) {
 
   return (
     <div className="stack screen">
-      <h1>Train</h1>
-      <section className="card stack">
-        <h2>Where are you today?</h2>
+      <div className="screen-head">
+        <h1>Train</h1>
+      </div>
+      <section className="group" aria-label="Where are you today?">
+        <div className="group-head">
+          <h2>Where are you today?</h2>
+        </div>
         <LocationPicker game={game} value={loc?.id ?? null} onPick={(id) => updateProfile({ lastLocationId: id })} />
-        <p className="small muted">Equipment: {eqNames.length ? `${eqNames.slice(0, 4).join(', ')}${eqNames.length > 4 ? ` +${eqNames.length - 4} more` : ''}` : 'none (bodyweight only)'}. Edit in Settings → My places.</p>
+        <p className="small faint">
+          {eq.length ? `${eq.length} equipment ${eq.length === 1 ? 'item' : 'items'} here` : 'Bodyweight only here'} · {d.available.length} exercises you can do. Edit places in Settings.
+        </p>
       </section>
 
       <PlansSection game={game} location={loc} toast={toast} onStart={(id) => void start(id)} />
-
-      {plan.length > 0 && (
-        <section className="card stack">
-          <h2>{starter.length ? 'Starter plan' : 'Plan for your goals'}</h2>
-          <p className="small muted">{starter.length ? 'Short on purpose: build the habit first. Beat one number, then rest.' : 'Picked from your goals and focus (Settings). Beat one number in each.'}</p>
-          {plan.map((x) => (
-            <div key={x.exerciseId} className="row between">
-              <span>
-                {iconFor(d.measuresOf(EXERCISE_BY_ID[x.exerciseId]))} {EXERCISE_BY_ID[x.exerciseId].name}
-              </span>
-              <span className="muted small">
-                {x.sets} {x.sets === 1 ? 'round' : 'sets'}
-              </span>
-            </div>
-          ))}
-        </section>
-      )}
-
-      <section className="card stack" aria-label="Exercises here">
-        <h2>You can do here ({d.available.length})</h2>
-        <p className="small muted">Last and Best for each. Tap one for its history.</p>
-        {here.map((e) => (
-          <ExerciseRow key={e.id} game={game} ex={e} onOpen={setHist} />
-        ))}
-      </section>
-      {hist && <HistorySheet game={game} ex={hist} onClose={() => setHist(null)} />}
-
-      <button className="btn primary big" onClick={() => void start()} disabled={busy}>
-        Start session
-      </button>
-      <p className="small muted" style={{ textAlign: 'center', marginTop: -4 }}>
-        A free session shows every exercise here. A plan shows only its own.
-      </p>
     </div>
   );
 }
@@ -258,65 +226,76 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
 
   return (
     <div className="stack screen">
-      <div className="row between">
-        <Avatar stage={d.stage} gear={d.gear} color={color} size={68} style={p.avatarStyle} gender={p.gender} action={avAction} />
+      <header className="session-head">
+        <Avatar stage={d.stage} gear={d.gear} color={color} size={64} style={p.avatarStyle} gender={p.gender} action={avAction} />
         <div className="grow">
-          <span className="tiny muted">
-            Session · {game.locations.find((l) => l.id === session.locationId)?.name ?? 'Anywhere'}
-            {myPlan ? ` · ${myPlan.name}` : ''}
-          </span>
-          <div className="clock">{fmtClock(t.exercise + t.rest + t.run + t.walk)}</div>
+          <h1 className="clamp1" style={{ fontSize: 'var(--fs-lg)' }}>{myPlan ? myPlan.name : 'Session'}</h1>
+          <span className="small faint">{game.locations.find((l) => l.id === session.locationId)?.name ?? 'Anywhere'}</span>
+          <div className="clock" aria-label="Session time">{fmtClock(t.exercise + t.rest + t.run + t.walk)}</div>
         </div>
-        <div className="stack small num" style={{ gap: 2, textAlign: 'right' }}>
+        <div className="session-times">
           <span>
-            <span style={{ color: 'var(--accent)' }}>●</span> Active {fmtClock(activeSeconds(t))}
+            <i className="dot" style={{ background: 'var(--accent)' }} />
+            Active {fmtClock(activeSeconds(t))}
           </span>
           <span>
-            <span style={{ color: 'var(--rest)' }}>●</span> Rest {fmtClock(t.rest)}
+            <i className="dot" style={{ background: 'var(--rest)' }} />
+            Rest {fmtClock(t.rest)}
           </span>
-          <span className="muted">{sessionSets.length} {sessionSets.length === 1 ? 'set' : 'sets'}</span>
+          <span className="faint">
+            {sessionSets.length} {sessionSets.length === 1 ? 'set' : 'sets'}
+          </span>
         </div>
-      </div>
+      </header>
 
       {live.cardio ? (
         <CardioPanel session={session} game={game} now={now} toast={toast} />
       ) : live.mode === 'rest' ? (
-        <div className={`mode-card stack ${over ? 'over' : 'rest'}`} aria-live="polite">
-          <span className="tiny">{over ? 'Rest is over. Back to work!' : 'Resting'}</span>
+        <div className={`mode-card ${over ? 'over' : 'rest'}`} aria-live="polite">
+          <span className="mode-label">
+            {over ? <AlarmClock size={18} aria-hidden /> : <Pause size={18} aria-hidden />}
+            {over ? 'Rest is over. Back to work!' : 'Resting'}
+          </span>
           <div className="clock">
-            {fmtClock(restFor)} <span className="muted" style={{ fontSize: 18 }}>/ {fmtClock(limit)}</span>
+            {fmtClock(restFor)} <span className="faint" style={{ fontSize: 'var(--fs-lg)' }}>/ {fmtClock(limit)}</span>
           </div>
-          <p className="small muted">Tap ▶ Back to work (bottom right) or Start set when you go again.</p>
+          <p className="small muted">Tap Back to work (bottom right) or Start set when you go again.</p>
         </div>
       ) : (
-        <div className="mode-card work stack">
-          <span className="tiny">Working</span>
+        <div className="mode-card work">
+          <span className="mode-label">
+            <Activity size={18} aria-hidden /> Working
+          </span>
           <p className="small muted">Log a set below. The rest timer starts by itself.</p>
           <button className="btn rest big" onClick={() => void goRest()}>
-            Start rest
+            <Pause size={20} aria-hidden /> Start rest
           </button>
         </div>
       )}
 
       {!live.cardio && myPlan && (
-        <section className="stack" aria-label="Plan exercises">
-          <div className="row between">
-            <h2>📋 {myPlan.name}</h2>
-            <span className="small muted">{planItems.length} exercises</span>
+        <section className="group" aria-label="Plan exercises">
+          <div className="group-head">
+            <h2>Exercises</h2>
+            <span className="small faint">{planItems.length} in this plan</span>
           </div>
           {planItems.length === 0 && <p className="small muted">This plan has no exercises you can do now.</p>}
           {planItems.map((it) => {
             const e = EXERCISE_BY_ID[it.exerciseId];
             return renderCard(e, it);
           })}
-          <button className="btn ghost" onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
+          <button className="btn secondary" onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
             {showAll ? 'Hide other exercises' : `Show all exercises here (${others.length} more)`}
           </button>
         </section>
       )}
       {!live.cardio && (!myPlan || showAll) && (
-        <section className="stack" aria-label="Exercises">
-          {myPlan && <h2>Other exercises here</h2>}
+        <section className="group" aria-label="Exercises">
+          {myPlan && (
+            <div className="group-head">
+              <h2>Other exercises here</h2>
+            </div>
+          )}
           {(myPlan ? others : ordered).map((e) => renderCard(e))}
         </section>
       )}
@@ -325,7 +304,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
       {live.mode === 'rest' && !live.cardio && (
         <button className={`fab-work ${over ? 'over' : ''}`} onClick={goWork} aria-label="Back to work">
           <span className="fab-ico" aria-hidden>
-            ▶
+            <Play size={22} fill="currentColor" />
           </span>
           <span className="stack" style={{ gap: 0, alignItems: 'flex-start' }}>
             <b>Back to work</b>
@@ -454,16 +433,16 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
   };
 
   return (
-    <div className={`card stack ${glow ? 'glow-pr' : ''}`} style={inPlan ? { borderColor: 'rgba(255,122,26,.5)' } : undefined}>
-      <button className="ex" style={{ background: 'none', border: 0, padding: 0, textAlign: 'left' }} onClick={onToggle} aria-expanded={open}>
-        <span className="ico">{iconFor(ms)}</span>
-        <span className="grow">
-          <b>{ex.name}</b> {inPlan && <span className="badge">plan</span>}
-          <br />
-          <span className="small muted">{lastBestText(ms, rec)}</span>
+    <div className={`card ex-card ${open ? 'open' : ''} ${inPlan ? 'in-plan' : ''} ${glow ? 'glow-pr' : ''}`}>
+      <button className="ex" onClick={onToggle} aria-expanded={open}>
+        <ExIcon ms={ms} exerciseId={ex.id} />
+        <span className="meta">
+          <b>
+            {ex.name} {inPlan && <span className="badge accent">plan</span>}
+          </b>
+          <span className="small muted num">{lastBestText(ms, rec)}</span>
           {planItem && (
             <>
-              <br />
               <span className="small plan-line">
                 Plan: {fmtPlanItem(planItem, ms)}
                 {sets.length >= planItem.sets ? ' · done ✓' : ` · set ${sets.length + 1} of ${planItem.sets}`}
@@ -475,18 +454,18 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
       </button>
 
       {open && (
-        <>
+        <div className="ex-body">
           <div className="beat">
             <div>
-              <span className="tiny muted">Last</span>
+              <span className="tiny">Last</span>
               <b className="num">{last ? fmtValues(ms, last, true) : '-'}</b>
             </div>
             <div>
-              <span className="tiny muted">{beat.kind === 'same' && typedLevel !== null ? `Record ${fmtLevel(beat, typedLevel).replace(/^(at|over) /, '')}` : 'Record'}</span>
+              <span className="tiny">{beat.kind === 'same' && typedLevel !== null ? `Record ${fmtLevel(beat, typedLevel).replace(/^(at|over) /, '')}` : 'Record'}</span>
               <b className="num">{levelBest ? fmtValues(beat.kind === 'same' ? [beat.beat] : ms, levelBest, true) : beat.kind === 'same' ? 'new' : '-'}</b>
             </div>
             <div className="target">
-              <span className="tiny muted">Beat this</span>
+              <span className="tiny" style={{ color: 'var(--accent)' }}>Beat this</span>
               <b className="num">{fmtTarget(ms, target)}</b>
             </div>
           </div>
@@ -496,16 +475,16 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
               🎯 {gt.label}: {gt.low}–{gt.high} reps × {gt.sets} sets, rest {gt.restSec} s
             </p>
           )}
-          <p className="small muted">💡 {ex.cue}</p>
-          <div className="row wrap">
-            <button className="btn ghost icon-btn" onClick={() => setDemo(true)}>
-              ▶ How to do it
+          <p className="small muted">{ex.cue}</p>
+          <div className="row wrap" style={{ gap: 'var(--s2)' }}>
+            <button className="btn secondary sm" onClick={() => setDemo(true)}>
+              <CirclePlay size={18} aria-hidden /> How to do it
             </button>
-            <button className="btn ghost icon-btn" onClick={() => setMeasuring(true)}>
-              📏 {trackLabel(ms, beat)}
+            <button className="btn secondary sm" onClick={() => setMeasuring(true)}>
+              <Ruler size={18} aria-hidden /> {trackLabel(ms, beat)}
             </button>
-            <button className="btn ghost icon-btn" onClick={onHistory}>
-              📈 History
+            <button className="btn secondary sm" onClick={onHistory}>
+              <TrendingUp size={18} aria-hidden /> History
             </button>
           </div>
 
@@ -516,16 +495,16 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
           ) : (
             <>
               {timed ? (
-                <button className="btn primary big start-set" onClick={() => setTiming(true)}>
-                  ▶ Start timer
+                <button className="btn outline big start-set" onClick={() => setTiming(true)}>
+                  <Timer size={22} aria-hidden /> Start timer
                 </button>
               ) : mode === 'exercise' ? (
                 <div className="working-pill" role="status">
-                  ● Set in progress. Log it when you finish.
+                  <Activity size={20} aria-hidden /> Set in progress. Log it when you finish.
                 </div>
               ) : (
-                <button className="btn primary big start-set" onClick={() => void onWork()}>
-                  ▶ Start set
+                <button className="btn outline big start-set" onClick={() => void onWork()}>
+                  <Play size={20} aria-hidden /> Start set
                 </button>
               )}
               <MeasureInputs ms={ms} v={v} onChange={setV} beat={beat} />
@@ -538,18 +517,18 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
           {sets.length > 0 && (
             <div className="stack" style={{ gap: 6 }}>
               {sets.map((s, i) => (
-                <div key={s.id} className="row between small">
+                <div key={s.id} className="set-row">
                   <span>
                     Set {i + 1}: {fmtSet(ms, s)} {s.isPR && <span className="badge pr">PR</span>}
                   </span>
                   <button className="btn ghost icon-btn" onClick={() => setEditing(s)} aria-label={`Edit set ${i + 1}`}>
-                    ✎ Edit
+                    <Pencil size={16} aria-hidden /> Edit
                   </button>
                 </div>
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
       {timing && (
         <TimerOverlay
@@ -576,9 +555,9 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
 }
 
 const CARDIO_MODES: { mode: LiveMode; label: string; cls: string }[] = [
-  { mode: 'run', label: '🏃 Run', cls: 'primary' },
-  { mode: 'walk', label: '🚶 Walk', cls: 'good' },
-  { mode: 'rest', label: '⏸ Rest', cls: 'rest' },
+  { mode: 'run', label: 'Run', cls: 'primary' },
+  { mode: 'walk', label: 'Walk', cls: 'good' },
+  { mode: 'rest', label: 'Rest', cls: 'rest' },
 ];
 
 function CardioPanel({ session, game, now, toast }: { session: Session; game: Game; now: number; toast: (t: string) => void }) {
@@ -601,7 +580,9 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
 
   return (
     <div className="mode-card work stack">
-      <span className="tiny">{ex.name}</span>
+      <span className="mode-label">
+        <Footprints size={18} aria-hidden /> {ex.name}
+      </span>
       <div className="clock">{fmtClock(total)}</div>
       <div className="row between small num">
         <span>Run {fmtClock(c.run)}</span>
@@ -615,7 +596,7 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
       <div className="modes">
         {CARDIO_MODES.map((m) => (
           <button key={m.mode} className={`btn ${m.cls} ${live.mode === m.mode ? 'on' : ''}`} onClick={() => setMode(session.id, m.mode)} aria-pressed={live.mode === m.mode}>
-            {m.label}
+            {m.mode === 'run' ? <Footprints size={20} aria-hidden /> : m.mode === 'walk' ? <PersonStanding size={20} aria-hidden /> : <Pause size={20} aria-hidden />} {m.label}
           </button>
         ))}
       </div>
@@ -636,7 +617,7 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
             setStopping(true);
           }}
         >
-          ⏹ Stop
+          <Square size={18} fill="currentColor" aria-hidden /> Stop
         </button>
       </div>
       {stopping && (

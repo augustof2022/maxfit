@@ -6,6 +6,7 @@ import type { Beat, Exercise, Measure, WorkSet } from '../core/types';
 import { deleteSet, setExerciseTrack, updateSet } from '../data/repo';
 import { confirmAsk } from './Confirm';
 import { Sheet, Stepper } from './ui';
+import { Square, Timer } from './Icon';
 
 const LABEL = (m: Measure) => MEASURES.find((x) => x.id === m)!.label;
 const FIXED: { id: 'weight' | 'distance'; label: string }[] = [
@@ -191,7 +192,7 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
             }
           }}
         >
-          {running !== null ? '■' : '⏱'}
+          {running !== null ? <Square size={16} fill="currentColor" aria-hidden /> : <Timer size={20} aria-hidden />}
         </button>
       </div>
     </label>

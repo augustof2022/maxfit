@@ -36,6 +36,13 @@ const shot = async (n) => {
   await page.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
 };
 
+// No workout without a plan (round 5): start a plan by name, then show every exercise here.
+async function startPlan(name = 'Starter plan', showAll = true) {
+  await page.getByRole('button', { name: `Start ${name}`, exact: true }).click();
+  await page.getByText('Working').waitFor();
+  if (showAll) await page.getByRole('button', { name: /Show all exercises here/ }).click();
+}
+
 // Grand reward cards (unlocks, gear, level-ups) come one at a time: tap Continue until none is left.
 const rewardsSeen = [];
 async function dismissRewards() {
@@ -63,7 +70,11 @@ try {
   // Train: location picker -> Home has no dumbbells
   await page.getByRole('button', { name: 'Start session' }).click();
   await page.getByRole('heading', { name: 'Train' }).waitFor();
-  check('Train shows the 5 starters at Home', (await page.getByText('You can do here (5)').count()) === 1);
+  // Round 5: Train = "Where are you today?" + "My plans at <place>" only; every place has a Starter plan.
+  await page.getByRole('heading', { name: 'My plans at Home' }).waitFor();
+  check('Train shows only the place picker and My plans', (await page.getByText(/You can do here/).count()) === 0 && (await page.getByRole('heading', { name: 'Starter plan' }).count()) === 0 && (await page.getByRole('heading', { level: 2 }).count()) === 2);
+  check('Home has a default, editable Starter plan', (await page.getByRole('button', { name: 'Start Starter plan', exact: true }).count()) === 1);
+  check('No free session: no plain Start session on Train', (await page.getByRole('button', { name: 'Start session', exact: true }).count()) === 0);
   await shot('02-train-pre');
 
   // Settings: rest limit 15 s so the alarm test is quick
@@ -75,9 +86,8 @@ try {
 
   // Start session, log push-ups
   await page.getByRole('button', { name: 'Train' }).click();
-  await page.getByRole('button', { name: 'Start session', exact: true }).click();
-  await page.getByText('Working').waitFor();
-  await page.getByRole('button', { name: /Push-up/ }).click();
+  await startPlan();
+  await page.getByRole('button', { name: /^Push-up/ }).click();
   check('First push-up target shown', await page.getByText('First time: try 5').isVisible());
   for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'More Reps', exact: true }).click();
   await page.getByRole('button', { name: 'Log set + rest' }).click();
@@ -91,9 +101,9 @@ try {
   await page.waitForTimeout(400);
   const fab = await page.getByRole('button', { name: 'Back to work' }).boundingBox();
   check('Back to work FAB stays visible while resting', !!fab && fab.y > 0 && fab.y + fab.height <= 844);
-  check('Rep exercise shows a big Start set while resting', await page.getByRole('button', { name: '▶ Start set' }).isVisible());
+  check('Rep exercise shows a big Start set while resting', await page.getByRole('button', { name: 'Start set', exact: true }).isVisible());
   await shot('05-rest-over');
-  await page.getByRole('button', { name: '▶ Start set' }).click();
+  await page.getByRole('button', { name: 'Start set', exact: true }).click();
   await page.getByText('Set in progress').waitFor();
   check('Start set switches to working', await page.getByText('Working', { exact: true }).isVisible());
 
@@ -109,12 +119,12 @@ try {
   await page.getByRole('button', { name: /Run \/ walk/ }).click();
   await page.getByRole('button', { name: 'Start run / walk' }).click();
   await page.waitForTimeout(1200);
-  await page.getByRole('button', { name: '🚶 Walk' }).click();
+  await page.getByRole('button', { name: 'Walk', exact: true }).click();
   await page.waitForTimeout(1200);
-  await page.getByRole('button', { name: '⏸ Rest' }).click();
+  await page.getByRole('button', { name: 'Rest', exact: true }).click();
   await page.waitForTimeout(1200);
   await shot('06-cardio');
-  await page.getByRole('button', { name: '⏹ Stop' }).click();
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
   await page.getByRole('heading', { name: 'How far did you go?' }).waitFor();
   await page.getByRole('button', { name: 'Save' }).click();
   await page.getByText(/Run \/ walk saved: 1 km/).waitFor();
@@ -148,8 +158,8 @@ try {
     await db.sessions.put({ id: 'yday', startedAt: t, endedAt: t + 900000, locationId: null, status: 'done', activeSec: 700, restSec: 200, xpEarned: 0, prs: 0, live: null, updatedAt: Date.now() });
   });
   await page.getByRole('button', { name: 'Train' }).click();
-  await page.getByRole('button', { name: 'Start session', exact: true }).click();
-  await page.getByRole('button', { name: /Push-up/ }).click();
+  await startPlan();
+  await page.getByRole('button', { name: /^Push-up/ }).click();
   await page.getByRole('button', { name: 'Log set + rest' }).click();
   // 12 push-ups unlock Plank by a record: the grand card shows at once, mid-session.
   await page.locator('.reward').waitFor({ timeout: 4000 });
@@ -179,12 +189,17 @@ try {
     await db.sessions.bulkPut(Array.from({ length: 14 }, (_, i) => ({ id: `old${i}`, startedAt: t + i * 3600000, endedAt: t + i * 3600000 + 600000, locationId: null, status: 'done', activeSec: 500, restSec: 100, xpEarned: 10, prs: 0, live: null, updatedAt: Date.now() })));
   });
   await page.getByRole('button', { name: 'Train' }).click();
-  await page.getByRole('radio', { name: /Gym/ }).click();
-  await page.waitForTimeout(400);
-  const gymHasCurl = (await page.getByText('Dumbbell curl').count()) > 0;
-  await page.getByRole('radio', { name: /Home/ }).click();
-  await page.waitForTimeout(400);
-  const homeHasCurl = (await page.getByText('Dumbbell curl').count()) > 0;
+  // The picker lists only unlocked exercises the place's equipment allows.
+  const pickerHas = async (place, exercise) => {
+    await page.getByRole('radio', { name: place, exact: true }).first().click();
+    await page.getByRole('button', { name: 'New plan', exact: true }).first().click();
+    await page.getByRole('list', { name: 'Exercises to add' }).waitFor();
+    const has = (await page.getByRole('button', { name: `Add ${exercise}`, exact: true }).count()) > 0;
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    return has;
+  };
+  const gymHasCurl = await pickerHas('Gym', 'Dumbbell curl');
+  const homeHasCurl = await pickerHas('Home', 'Dumbbell curl');
   check('Saved locations load equipment (curl at Gym, not at Home)', gymHasCurl && !homeHasCurl, `gym=${gymHasCurl} home=${homeHasCurl}`);
 
   // New place: type a name, pick equipment from the library, add a custom item.
@@ -205,41 +220,72 @@ try {
   await page.getByRole('button', { name: 'Train' }).click();
   await page.getByRole('radio', { name: /Office gym/ }).click();
   await page.waitForTimeout(300);
-  check('Training at the new place loads its equipment', (await page.getByText('Dumbbell curl').count()) > 0);
+  check('A new place gets its own Starter plan', (await page.getByRole('heading', { name: 'My plans at Office gym' }).count()) === 1 && (await page.getByRole('button', { name: 'Start Starter plan', exact: true }).count()) === 1);
+  check('Training at the new place loads its equipment', await pickerHas('Office gym', 'Dumbbell curl'));
   await shot('13-train-new-place');
 
   // ---- Exercise plans per place (Boss R, 2026-11-18) ----
-  await page.getByRole('radio', { name: /Gym/ }).click();
-  await page.getByRole('button', { name: '+ New plan' }).click();
+  await page.getByRole('radio', { name: 'Gym', exact: true }).first().click();
+  await page.getByRole('button', { name: 'New plan', exact: true }).first().click();
+  // + New plan = the row list: name, body parts, description, Watch the steps, my last, beat target, + Add.
+  const pushRow = page.getByRole('listitem', { name: 'Push-up', exact: true });
+  check('Picker row: name, body parts, description, Watch the steps, Last, Beat, + Add', /Chest, Arms, Shoulders/.test(await pushRow.textContent()) && /Body straight/.test(await pushRow.textContent()) && (await pushRow.getByRole('button', { name: 'Watch the steps: Push-up' }).count()) === 1 && /Last .*Beat: /.test(await pushRow.textContent()) && (await pushRow.getByRole('button', { name: 'Add Push-up' }).count()) === 1);
+  await shot('19-picker');
+  // Filters: cardio, bodyweight vs equipment, search; then add with the config sheet, filters kept.
+  await page.getByRole('radio', { name: 'Cardio', exact: true }).click();
+  const cardioOk = (await page.getByRole('button', { name: 'Add Run in place' }).count()) === 1 && (await page.getByRole('button', { name: 'Add Push-up' }).count()) === 0;
+  await page.getByRole('radio', { name: 'All', exact: true }).click();
+  await page.getByRole('radio', { name: 'Bodyweight', exact: true }).click();
+  const bwOk = (await page.getByRole('button', { name: 'Add Dumbbell curl' }).count()) === 0 && (await page.getByRole('button', { name: 'Add Push-up' }).count()) === 1;
+  await page.getByRole('radio', { name: 'Equipment', exact: true }).click();
+  const eqOk = (await page.getByRole('button', { name: 'Add Dumbbell curl' }).count()) === 1 && (await page.getByRole('button', { name: 'Add Push-up' }).count()) === 0;
+  await page.getByRole('radio', { name: 'Any', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Search exercises' }).fill('push up');
+  const searchOk = (await page.getByRole('button', { name: 'Add Push-up' }).count()) === 1 && (await page.getByRole('button', { name: 'Add Run in place' }).count()) === 0;
+  check('Picker filters: cardio, bodyweight, equipment, search', cardioOk && bwOk && eqOk && searchOk, `cardio=${cardioOk} bw=${bwOk} eq=${eqOk} search=${searchOk}`);
+  await page.getByRole('button', { name: 'Add Push-up' }).click();
+  await page.getByRole('radiogroup', { name: 'How to beat it' }).waitFor();
+  check('+ Add opens the config sheet: sets, target, how to beat', (await page.getByRole('textbox', { name: 'Sets', exact: true }).count()) === 1 && (await page.getByRole('textbox', { name: 'Reps', exact: true }).count()) === 1);
+  await page.getByRole('button', { name: 'More Sets' }).click();
+  await shot('19b-config-sheet');
+  await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
+  check('Back in the list with the search kept; the row shows Added', (await page.getByRole('searchbox', { name: 'Search exercises' }).inputValue()) === 'push up' && (await page.getByRole('status', { name: 'Push-up added' }).count()) === 1);
+  await page.getByRole('searchbox', { name: 'Search exercises' }).fill('');
+  for (const n of ['Dumbbell curl', 'Run in place']) {
+    await page.getByRole('button', { name: `Add ${n}`, exact: true }).click();
+    await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
+  }
   await page.getByPlaceholder('e.g. Push day').fill('Gym A');
   await page.getByPlaceholder(/Chest and arms/).fill('Quick full body');
-  for (const n of ['Push-up', 'Dumbbell curl', 'Run in place']) await page.getByRole('button', { name: `+ ${n}`, exact: true }).click();
   await page.getByRole('button', { name: 'Move Run in place up' }).click();
+  check('Plan item keeps its sets from the sheet (4 sets)', /4 sets/.test(await page.getByRole('listitem', { name: 'Plan exercise 1: Push-up' }).textContent()));
   await shot('20-plan-editor');
-  await page.getByRole('button', { name: 'Save plan' }).click();
+  await page.getByRole('button', { name: /^Save plan/ }).click();
   await page.getByRole('region', { name: 'Plan Gym A' }).waitFor();
   const order = await page.getByRole('region', { name: 'Plan Gym A' }).locator('.plan-ex b').allTextContents();
   check('Plan saved with its exercises in the chosen order', order.join(',') === 'Push-up,Run in place,Dumbbell curl', order.join(','));
   await shot('21-plan-detail');
-  await page.getByRole('button', { name: '⧉ Duplicate' }).click();
+  await page.getByRole('button', { name: 'Duplicate', exact: true }).click();
   await page.getByRole('heading', { name: 'Edit plan' }).waitFor();
   check('Duplicate opens the copy to rename', (await page.getByPlaceholder('e.g. Push day').inputValue()) === 'Gym A (copy)');
   await page.getByPlaceholder('e.g. Push day').fill('Gym B');
-  await page.getByRole('button', { name: 'Save plan' }).click();
+  await page.getByRole('button', { name: /^Save plan/ }).click();
   await page.waitForTimeout(300);
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
   await page.waitForTimeout(300);
-  check('Duplicate made, then deleted; the original stays', (await page.getByRole('button', { name: /Gym B/ }).count()) === 0 && (await page.getByRole('button', { name: /Gym A/ }).count()) === 1);
+  check('Duplicate made, then deleted; the original stays', (await page.getByRole('button', { name: /^Gym B, / }).count()) === 0 && (await page.getByRole('button', { name: /^Gym A, / }).count()) === 1);
   // Import from Gym into Home: a copy. Edit the copy; the Gym original keeps 3 exercises.
-  await page.getByRole('radio', { name: /Home/ }).first().click();
-  await page.getByRole('button', { name: '⇩ Import' }).click();
-  await page.getByRole('radio', { name: /Gym/ }).last().click();
+  await page.getByRole('radio', { name: 'Home', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Import a plan from another place' }).click();
+  await page.getByRole('radiogroup', { name: 'Import from place' }).getByRole('radio', { name: 'Gym', exact: true }).click();
   await page.getByRole('button', { name: 'Import Gym A' }).click();
   await page.getByRole('region', { name: 'Plan Gym A' }).waitFor();
-  await page.getByRole('button', { name: '✎ Edit' }).click();
+  // Editing is obvious on the open plan: "Edit plan".
+  await page.getByRole('button', { name: 'Edit plan', exact: true }).click();
   await page.getByRole('button', { name: 'Remove Dumbbell curl' }).click();
-  await page.getByRole('button', { name: 'Save plan' }).click();
+  await shot('21b-plan-edit');
+  await page.getByRole('button', { name: /^Save plan/ }).click();
   await page.waitForTimeout(300);
   const counts = await page.evaluate(async () => {
     const { db } = await import('/src/data/db.ts');
@@ -248,10 +294,9 @@ try {
   check('Imported plan is a copy (Home edited, Gym original unchanged)', counts === 'gym:3,home:2', counts);
 
   // Start the plan at Gym: only its exercises, plus "Show all exercises here".
-  await page.getByRole('radio', { name: /Gym/ }).first().click();
-  await page.getByRole('button', { name: /Gym A/ }).click();
-  await page.getByRole('button', { name: '▶ Start this plan' }).click();
-  await page.getByRole('heading', { name: '📋 Gym A' }).waitFor();
+  await page.getByRole('radio', { name: 'Gym', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Start Gym A', exact: true }).click();
+  await page.getByRole('heading', { name: 'Gym A', level: 1 }).waitFor();
   const onlyPlan = (await page.getByRole('button', { name: /Bodyweight squat/ }).count()) === 0;
   await page.getByRole('button', { name: /Show all exercises here/ }).click();
   check('A plan shows only its exercises, with "Show all exercises here"', onlyPlan && (await page.getByRole('button', { name: /Bodyweight squat/ }).count()) === 1);
@@ -259,7 +304,7 @@ try {
 
   // Timer: 3-2-1-GO, big clock, big Stop; Stop fills the time and starts the rest.
   await page.getByRole('button', { name: /Run in place/ }).first().click();
-  await page.getByRole('button', { name: '▶ Start timer' }).click();
+  await page.getByRole('button', { name: 'Start timer', exact: true }).click();
   await page.getByText('Get ready').waitFor();
   await shot('22-timer-countdown');
   await page.waitForTimeout(4200);
@@ -291,7 +336,7 @@ try {
     await db.sets.bulkPut([{ id: 'h1', sessionId: 'old0', exerciseId: 'push_up', at: t, reps: 6, isPR: false, updatedAt: Date.now() }, { id: 'h2', sessionId: 'old0', exerciseId: 'push_up', at: t + 60000, reps: 8, isPR: false, updatedAt: Date.now() }]);
   });
   await page.getByRole('button', { name: /Push-up/ }).first().click();
-  await page.getByRole('button', { name: '📈 History' }).click();
+  await page.getByRole('button', { name: 'History', exact: true }).click();
   const hist = page.getByRole('list', { name: 'Push-up by day' });
   await hist.waitFor();
   check('History lists days with the best set and records marked', (await hist.getByRole('listitem').count()) >= 2 && (await hist.getByText('🏆 Record').count()) >= 1 && (await hist.getByText('8 reps').count()) === 1 && (await page.getByRole('img', { name: /Trend in reps/ }).count()) === 1);

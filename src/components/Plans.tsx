@@ -1,30 +1,23 @@
-// Exercise plans per place (Renz, 2026-11-18). On Train, right under "Where are you today?":
-// the plans saved for the picked place. Tap one to see it, start it, edit, duplicate or delete it.
-// "Import" copies a plan from another place (like importing questions in Google Forms): a COPY.
+// Exercise plans per place (Renz, 2026-11-18; round 5 redesign). Train shows "My plans at <place>":
+// each row has the name, description, number of exercises, last used, and Start. Tapping a row opens the
+// plan (its exercises, and an obvious Edit). Editing happens on a full page: name, description, place,
+// the exercises (configure, reorder, remove) and the exercise picker to add more. Import copies a plan
+// from another place (a COPY); Duplicate copies it in the same place. No workout without a plan.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EXERCISE_BY_ID } from '../core/exercises';
 import { fmtDay, lastBestText } from '../core/format';
-import { iconFor } from '../core/measures';
-import { cleanTarget, fmtPlanItem, moveItem, PLAN_DESC_MAX, PLAN_MAX_SETS, PLAN_NAME_MAX, planError, plansAt } from '../core/plans';
+import { fmtPlanItem, moveItem, PLAN_DESC_MAX, PLAN_NAME_MAX, planError, plansAt } from '../core/plans';
 import { availableExercises } from '../core/rules';
-import type { Beat, Exercise, Location, Measure, Plan, PlanItem, PlanTarget, WorkSet } from '../core/types';
-import { deletePlan, duplicatePlan, importPlan, markPlanViewed, savePlan, type PlanDraft } from '../data/repo';
+import type { Exercise, Location, Plan, PlanItem } from '../core/types';
 import { db } from '../data/db';
+import { deletePlan, duplicatePlan, importPlan, markPlanViewed, savePlan, type PlanDraft } from '../data/repo';
 import type { Game } from '../data/useGame';
 import { confirmAsk } from './Confirm';
 import { HistorySheet } from './ExerciseHistory';
-import { MeasureInputs, MeasureSheet, trackLabel } from './SetEditors';
-import { Sheet, Stepper } from './ui';
-
-const placeIcon = (l: Location) => (l.kind === 'home' ? '🏠' : l.kind === 'gym' ? '🏋️' : l.kind === 'outdoor' ? '🌳' : '📍');
-
-/** MeasureInputs writes a run's time as durationSec; a plan stores it as seconds. */
-function timeKey(ms: Measure[], beat: Beat): 'seconds' | 'durationSec' {
-  return ms.includes('distance') && !(beat.kind === 'same' && beat.fixed === 'distance') ? 'durationSec' : 'seconds';
-}
-const toInputs = (t: PlanTarget, k: 'seconds' | 'durationSec'): Partial<WorkSet> => (k === 'durationSec' ? { ...t, seconds: undefined, durationSec: t.seconds } : { ...t });
-const fromInputs = (v: Partial<WorkSet>, k: 'seconds' | 'durationSec'): PlanTarget => cleanTarget({ reps: v.reps, weightKg: v.weightKg, distanceKm: v.distanceKm, seconds: k === 'durationSec' ? v.durationSec : v.seconds });
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Download, ExIcon, Pencil, Play, Plus, PlaceIcon, Trash2, X } from './Icon';
+import { ConfigSheet, ExercisePicker } from './Picker';
+import { Sheet } from './ui';
 
 export function PlansSection({ game, location, onStart, toast }: { game: Game; location: Location | null; onStart: (planId: string) => void; toast: (t: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -32,73 +25,100 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
   const [importing, setImporting] = useState(false);
   if (!location) return null;
   const plans = plansAt(game.plans, location.id, game.planUsed);
+  const active = !!game.d!.active;
 
   const open = (p: Plan) => {
     const next = openId === p.id ? null : p.id;
     setOpenId(next);
     if (next) void markPlanViewed(p.id);
   };
+  const edit = (p: Plan) => setEditing({ id: p.id, name: p.name, description: p.description, locationId: p.locationId, items: p.items.map((i) => ({ ...i, target: { ...i.target } })) });
 
   return (
-    <section className="card stack" aria-label="Exercise plans">
-      <div className="row between wrap">
-        <h2>
-          Plans · {placeIcon(location)} {location.name}
-        </h2>
-        <div className="row">
-          <button className="btn ghost icon-btn" onClick={() => setImporting(true)}>
-            ⇩ Import
-          </button>
-          <button className="btn ghost icon-btn" onClick={() => setEditing({ name: '', description: '', locationId: location.id, items: [] })}>
-            + New plan
-          </button>
-        </div>
+    <section className="group" aria-label="My plans">
+      <div className="group-head">
+        <h2>My plans at {location.name}</h2>
+        <button className="btn secondary sm" onClick={() => setEditing({ name: '', description: '', locationId: location.id, items: [] })}>
+          <Plus size={18} aria-hidden /> New plan
+        </button>
       </div>
-      {plans.length === 0 && <p className="small muted">No plans here yet. Make one from the exercises you have unlocked, or import one from another place.</p>}
-      {plans.map((p) => (
-        <div key={p.id} className="stack" style={{ gap: 8 }}>
-          <button className={`plan-row ${openId === p.id ? 'on' : ''}`} onClick={() => open(p)} aria-expanded={openId === p.id}>
-            <span className="grow stack" style={{ gap: 2 }}>
-              <b>{p.name}</b>
-              {p.description && <span className="small muted clamp1">{p.description}</span>}
-              <span className="tiny muted">
-                {game.planUsed.get(p.id) ? `Last used ${fmtDay(game.planUsed.get(p.id)!)}` : 'Not used yet'} · {p.items.length} {p.items.length === 1 ? 'exercise' : 'exercises'}
-              </span>
-            </span>
-            <span aria-hidden className="muted">
-              {openId === p.id ? '▴' : '▾'}
-            </span>
-          </button>
-          {openId === p.id && (
-            <PlanDetail
-              game={game}
-              plan={p}
-              onStart={() => onStart(p.id)}
-              onEdit={() => setEditing({ id: p.id, name: p.name, description: p.description, locationId: p.locationId, items: p.items.map((i) => ({ ...i, target: { ...i.target } })) })}
-              onDuplicate={async () => {
-                const id = await duplicatePlan(p.id);
-                setOpenId(id);
-                toast('Plan duplicated. Rename it and change what you like.');
-                const copy = await db.plans.get(id);
-                if (copy) setEditing({ id, name: copy.name, description: copy.description, locationId: copy.locationId, items: copy.items });
-              }}
-              onDelete={async () => {
-                if (!(await confirmAsk({ title: `Delete "${p.name}"?`, body: 'The plan goes. Your sets, records and sessions stay.', ok: 'Delete', danger: true }))) return;
-                await deletePlan(p.id);
-                setOpenId(null);
-                toast('Plan deleted.');
-              }}
-            />
-          )}
+
+      {plans.length === 0 ? (
+        <div className="list empty">
+          <p>No plans here yet. Every workout starts from a plan: pick the exercises once, then just tap Start.</p>
+          <div className="row">
+            <button className="btn primary" onClick={() => setEditing({ name: '', description: '', locationId: location.id, items: [] })}>
+              <Plus size={18} aria-hidden /> New plan
+            </button>
+            <button className="btn secondary" onClick={() => setImporting(true)}>
+              <Download size={18} aria-hidden /> Import
+            </button>
+          </div>
         </div>
-      ))}
+      ) : (
+        <div className="list">
+          {plans.map((p) => {
+            const used = game.planUsed.get(p.id);
+            const isOpen = openId === p.id;
+            return (
+              <div key={p.id} className={`plan-wrap ${isOpen ? 'open' : ''}`}>
+                <div className="row" style={{ gap: 0, paddingRight: 'var(--s3)' }}>
+                  <button className={`plan-row ${isOpen ? 'on' : ''}`} onClick={() => open(p)} aria-expanded={isOpen} aria-label={`${p.name}, ${p.items.length} exercises`}>
+                    <span className="meta">
+                      <b>{p.name}</b>
+                      {p.description && !isOpen && <span className="sub clamp1">{p.description}</span>}
+                      <span className="small faint num">
+                        {p.items.length} {p.items.length === 1 ? 'exercise' : 'exercises'} · {used ? `last used ${fmtDay(used)}` : 'not used yet'}
+                      </span>
+                    </span>
+                    {isOpen ? <ChevronUp size={20} className="chev" aria-hidden /> : <ChevronDown size={20} className="chev" aria-hidden />}
+                  </button>
+                  <button className="btn primary sm" onClick={() => onStart(p.id)} disabled={active} aria-label={`Start ${p.name}`}>
+                    <Play size={16} aria-hidden /> Start
+                  </button>
+                </div>
+                {isOpen && (
+                  <PlanDetail
+                    game={game}
+                    plan={p}
+                    onEdit={() => edit(p)}
+                    onDuplicate={async () => {
+                      const id = await duplicatePlan(p.id);
+                      setOpenId(id);
+                      toast('Plan duplicated. Rename it and change what you like.');
+                      const copy = await db.plans.get(id);
+                      if (copy) setEditing({ id, name: copy.name, description: copy.description, locationId: copy.locationId, items: copy.items });
+                    }}
+                    onDelete={async () => {
+                      if (!(await confirmAsk({ title: `Delete "${p.name}"?`, body: 'The plan goes. Your sets, records and sessions stay.', ok: 'Delete', danger: true }))) return;
+                      await deletePlan(p.id);
+                      setOpenId(null);
+                      toast('Plan deleted.');
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {active && <p className="small faint">A session is running. Finish it to start another plan.</p>}
+      {plans.length > 0 && (
+        <button className="btn quiet" style={{ alignSelf: 'flex-start' }} onClick={() => setImporting(true)}>
+          <Download size={18} aria-hidden /> Import a plan from another place
+        </button>
+      )}
+
       {editing && (
         <PlanEditor
           game={game}
           draft={editing}
           onClose={(id) => {
             setEditing(null);
-            if (id) setOpenId(id);
+            if (id) {
+              setOpenId(id);
+              toast('Plan saved.');
+            }
           }}
         />
       )}
@@ -119,20 +139,19 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
   );
 }
 
-function PlanDetail({ game, plan, onStart, onEdit, onDuplicate, onDelete }: { game: Game; plan: Plan; onStart: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void }) {
+/** An open plan: what is in it, when it was used, and the actions. Editing is one obvious button. */
+function PlanDetail({ game, plan, onEdit, onDuplicate, onDelete }: { game: Game; plan: Plan; onEdit: () => void; onDuplicate: () => void; onDelete: () => void }) {
   const d = game.d!;
   const [hist, setHist] = useState<Exercise | null>(null);
-  const active = !!d.active;
+  const used = game.planUsed.get(plan.id);
+  const viewed = game.planViewed.get(plan.id);
   return (
-    <section className="plan-detail stack" aria-label={`Plan ${plan.name}`}>
-      <div className="stack" style={{ gap: 2 }}>
-        <h3>{plan.name}</h3>
-        {plan.description && <p className="small">{plan.description}</p>}
-        <span className="tiny muted">
-          {game.planUsed.get(plan.id) ? `Last used ${fmtDay(game.planUsed.get(plan.id)!, true)}` : 'Not used yet'}
-          {game.planViewed.get(plan.id) ? ` · Viewed ${fmtDay(game.planViewed.get(plan.id)!)}` : ''}
-        </span>
-      </div>
+    <section className="plan-detail" aria-label={`Plan ${plan.name}`}>
+      {plan.description && <p className="small">{plan.description}</p>}
+      <span className="small faint">
+        {used ? `Last used ${fmtDay(used, true)}` : 'Not used yet'}
+        {viewed ? ` · viewed ${fmtDay(viewed)}` : ''}
+      </span>
       <ol className="plan-list">
         {plan.items.map((it) => {
           const ex = EXERCISE_BY_ID[it.exerciseId];
@@ -142,34 +161,26 @@ function PlanDetail({ game, plan, onStart, onEdit, onDuplicate, onDelete }: { ga
           return (
             <li key={it.exerciseId}>
               <button className="plan-ex" onClick={() => setHist(ex)} aria-label={`${ex.name} history`}>
-                <span className="ico" aria-hidden>
-                  {iconFor(ms)}
-                </span>
-                <span className="grow stack" style={{ gap: 2 }}>
+                <ExIcon ms={ms} exerciseId={ex.id} size="sm" />
+                <span className="meta">
                   <b>{ex.name}</b>
-                  <span className="small">{fmtPlanItem(it, ms)}</span>
-                  <span className="tiny muted num" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                    {ok ? lastBestText(ms, d.stats.records.get(ex.id)) : 'Locked again (its unlock data was deleted)'}
-                  </span>
+                  <span className="sub">{fmtPlanItem(it, ms)}</span>
+                  <span className="small faint num">{ok ? lastBestText(ms, d.stats.records.get(ex.id)) : 'Locked again (its unlock data was deleted)'}</span>
                 </span>
               </button>
             </li>
           );
         })}
       </ol>
-      <button className="btn primary big" onClick={onStart} disabled={active}>
-        ▶ Start this plan
+      <button className="btn secondary big" onClick={onEdit}>
+        <Pencil size={18} aria-hidden /> Edit plan
       </button>
-      {active && <p className="small muted">A session is running. Finish it first.</p>}
       <div className="row">
-        <button className="btn ghost grow" onClick={onEdit}>
-          ✎ Edit
+        <button className="btn secondary grow" onClick={onDuplicate}>
+          <Copy size={18} aria-hidden /> Duplicate
         </button>
-        <button className="btn ghost grow" onClick={onDuplicate}>
-          ⧉ Duplicate
-        </button>
-        <button className="btn danger" onClick={onDelete}>
-          Delete
+        <button className="btn danger grow" onClick={onDelete}>
+          <Trash2 size={18} aria-hidden /> Delete
         </button>
       </div>
       {hist && <HistorySheet game={game} ex={hist} onClose={() => setHist(null)} />}
@@ -177,145 +188,164 @@ function PlanDetail({ game, plan, onStart, onEdit, onDuplicate, onDelete }: { ga
   );
 }
 
-/** Create or edit a plan: name, description, place, and exercises (sets, target, how to beat). */
+/**
+ * Create or edit a plan on a full page: details, the exercises in it (configure, reorder, remove), and the
+ * picker to add more. Only exercises he has unlocked and the place's equipment allows can be added.
+ */
 export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDraft; onClose: (savedId?: string) => void }) {
   const d = game.d!;
   const [name, setName] = useState(draft.name);
   const [description, setDescription] = useState(draft.description);
   const [locationId, setLocationId] = useState(draft.locationId);
   const [items, setItems] = useState<PlanItem[]>(draft.items);
-  const [adding, setAdding] = useState(draft.items.length === 0);
-  const [measuring, setMeasuring] = useState<Exercise | null>(null);
+  const [configuring, setConfiguring] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const loc = game.locations.find((l) => l.id === locationId) ?? null;
-  // Only exercises he has unlocked AND the place's equipment allows.
-  const doable = availableExercises(d.unlocked, loc?.equipment ?? []);
-  const doableIds = new Set(doable.map((e) => e.id));
-  const addable = doable.filter((e) => !items.some((i) => i.exerciseId === e.id));
+  const doableIds = new Set(availableExercises(d.unlocked, loc?.equipment ?? []).map((e) => e.id));
   const dirty = name !== draft.name || description !== draft.description || locationId !== draft.locationId || JSON.stringify(items) !== JSON.stringify(draft.items);
+  const isNew = !draft.id;
+  const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setErr(null), [name, locationId, items]);
+  // The page is a dialog: lock the app behind it from scrolling.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   const close = async () => {
     if (dirty && !(await confirmAsk({ title: 'Leave without saving?', body: 'Your changes to this plan are lost.', ok: 'Leave', danger: true }))) return;
     onClose();
   };
   const save = async () => {
-    const e = planError({ name, locationId, items });
-    if (e) return setErr(e);
+    const finalName = name.trim() || (isNew && items.length ? 'My plan' : '');
+    const e = planError({ name: finalName, locationId, items });
+    if (e) {
+      setErr(e);
+      if (!finalName) nameRef.current?.focus();
+      return;
+    }
     if (items.some((i) => !doableIds.has(i.exerciseId))) return setErr(`Some exercises cannot be done at ${loc?.name ?? 'this place'} (equipment or locked). Remove them first.`);
     setBusy(true);
     try {
-      const id = await savePlan({ id: draft.id, name, description, locationId, items });
-      onClose(id);
+      onClose(await savePlan({ id: draft.id, name: finalName, description, locationId, items }));
     } catch (x) {
       setErr((x as Error).message);
     } finally {
       setBusy(false);
     }
   };
-  const patch = (i: number, p: Partial<PlanItem>) => setItems((cur) => cur.map((it, j) => (j === i ? { ...it, ...p } : it)));
+  const editing = configuring !== null ? items[configuring] : null;
 
   return (
-    <Sheet onClose={close}>
-      <h2>{draft.id ? 'Edit plan' : 'New plan'}</h2>
-      <label className="field">
-        Name
-        <input className="input" value={name} maxLength={PLAN_NAME_MAX} placeholder="e.g. Push day" onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label className="field">
-        Description (optional)
-        <textarea className="input" rows={2} value={description} maxLength={PLAN_DESC_MAX} placeholder="e.g. Chest and arms, 30 minutes" onChange={(e) => setDescription(e.target.value)} />
-      </label>
-      <span className="tiny muted">Place</span>
-      <div className="row wrap" role="radiogroup" aria-label="Plan place">
-        {game.locations.map((l) => (
-          <button key={l.id} role="radio" aria-checked={locationId === l.id} className={`chip ${locationId === l.id ? 'on' : ''}`} onClick={() => setLocationId(l.id)}>
-            {placeIcon(l)} {l.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="row between">
-        <span className="tiny muted">Exercises ({items.length})</span>
-        <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-          Target 0 = beat your record
-        </span>
-      </div>
-      {items.map((it, i) => {
-        const ex = EXERCISE_BY_ID[it.exerciseId];
-        if (!ex) return null;
-        const ms = d.measuresOf(ex);
-        const beat = d.beatOf(ex);
-        const k = timeKey(ms, beat);
-        const ok = doableIds.has(ex.id);
-        return (
-          <div key={ex.id} className={`card flat stack plan-item ${ok ? '' : 'warn'}`} aria-label={`Plan exercise ${i + 1}: ${ex.name}`}>
-            <div className="row between">
-              <b>
-                {i + 1}. {iconFor(ms)} {ex.name}
-              </b>
-              <div className="row" style={{ gap: 4 }}>
-                <button className="btn ghost icon-btn" aria-label={`Move ${ex.name} up`} disabled={i === 0} onClick={() => setItems((c) => moveItem(c, i, -1))}>
-                  ↑
+    <div className="page" role="dialog" aria-modal="true" aria-label={isNew ? 'New plan' : 'Edit plan'}>
+      <header className="page-head">
+        <button className="btn icon secondary" onClick={close} aria-label="Close">
+          <X size={20} aria-hidden />
+        </button>
+        <h1>{isNew ? 'New plan' : 'Edit plan'}</h1>
+        <button className="btn quiet" onClick={save} disabled={busy}>
+          Save
+        </button>
+      </header>
+      <div className="page-body">
+        <section className="group" aria-label="Plan details">
+          <label className="field">
+            Name
+            <input ref={nameRef} className="input" value={name} maxLength={PLAN_NAME_MAX} placeholder="e.g. Push day" onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="field">
+            Description (optional)
+            <textarea className="input" rows={2} value={description} maxLength={PLAN_DESC_MAX} placeholder="e.g. Chest and arms, 30 minutes" onChange={(e) => setDescription(e.target.value)} />
+          </label>
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="tiny">Place</span>
+            <div className="chips" role="radiogroup" aria-label="Plan place">
+              {game.locations.map((l) => (
+                <button key={l.id} role="radio" aria-checked={locationId === l.id} className={`chip ${locationId === l.id ? 'on' : ''}`} onClick={() => setLocationId(l.id)}>
+                  <PlaceIcon kind={l.kind} /> {l.name}
                 </button>
-                <button className="btn ghost icon-btn" aria-label={`Move ${ex.name} down`} disabled={i === items.length - 1} onClick={() => setItems((c) => moveItem(c, i, 1))}>
-                  ↓
-                </button>
-                <button className="btn ghost icon-btn" aria-label={`Remove ${ex.name}`} onClick={() => setItems((c) => c.filter((_, j) => j !== i))}>
-                  ✕
-                </button>
-              </div>
+              ))}
             </div>
-            {!ok && <span className="small" style={{ color: 'var(--bad)' }}>Not doable at {loc?.name ?? 'this place'}: remove it or pick another place.</span>}
-            <Stepper label="Sets" value={it.sets} min={1} onChange={(x) => patch(i, { sets: Math.max(1, Math.min(PLAN_MAX_SETS, Math.round(x))) })} />
-            <span className="tiny muted">Target per set</span>
-            <MeasureInputs ms={ms} beat={beat} v={toInputs(it.target, k)} onChange={(v) => patch(i, { target: fromInputs(v, k) })} />
-            <button className="btn ghost icon-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setMeasuring(ex)}>
-              📏 How to beat it: {trackLabel(ms, beat)}
-            </button>
           </div>
-        );
-      })}
+        </section>
 
-      {adding ? (
-        <div className="card flat stack">
-          <div className="row between">
-            <b>Add exercises</b>
-            {items.length > 0 && (
-              <button className="btn ghost icon-btn" onClick={() => setAdding(false)}>
-                Done
-              </button>
-            )}
+        <section className="group" aria-label="Exercises in this plan">
+          <div className="group-head">
+            <h2>In this plan ({items.length})</h2>
           </div>
-          <p className="small muted">Only exercises you have unlocked that {loc?.name ?? 'this place'} has the equipment for.</p>
-          {addable.length === 0 && <p className="small muted">All of them are in the plan.</p>}
-          <div className="row wrap">
-            {addable.map((e) => (
-              <button key={e.id} className="chip" onClick={() => setItems((c) => [...c, { exerciseId: e.id, sets: 3, target: {} }])}>
-                + {e.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <button className="btn ghost" onClick={() => setAdding(true)}>
-          + Add exercise
-        </button>
-      )}
+          {items.length === 0 ? (
+            <p className="list empty">Nothing yet. Add exercises from the list below: tap + Add on each one you want.</p>
+          ) : (
+            <ol className="list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {items.map((it, i) => {
+                const ex = EXERCISE_BY_ID[it.exerciseId];
+                if (!ex) return null;
+                const ms = d.measuresOf(ex);
+                const ok = doableIds.has(ex.id);
+                return (
+                  <li key={ex.id} className={`plan-item ${ok ? '' : 'warn'}`} aria-label={`Plan exercise ${i + 1}: ${ex.name}`}>
+                    <button className="linkish grow" style={{ minWidth: 0 }} onClick={() => setConfiguring(i)} aria-label={`Configure ${ex.name}`}>
+                      <ExIcon ms={ms} exerciseId={ex.id} size="sm" />
+                      <span className="meta">
+                        <b>{ex.name}</b>
+                        <span className="sub">{ok ? fmtPlanItem(it, ms) : `Not doable at ${loc?.name ?? 'this place'}`}</span>
+                      </span>
+                    </button>
+                    <div className="row" style={{ gap: 2 }}>
+                      <button className="btn icon secondary" aria-label={`Move ${ex.name} up`} disabled={i === 0} onClick={() => setItems((c) => moveItem(c, i, -1))}>
+                        <ArrowUp size={18} aria-hidden />
+                      </button>
+                      <button className="btn icon secondary" aria-label={`Move ${ex.name} down`} disabled={i === items.length - 1} onClick={() => setItems((c) => moveItem(c, i, 1))}>
+                        <ArrowDown size={18} aria-hidden />
+                      </button>
+                      <button className="btn icon secondary" aria-label={`Remove ${ex.name}`} onClick={() => setItems((c) => c.filter((_, j) => j !== i))}>
+                        <Trash2 size={18} aria-hidden />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          {items.length > 0 && <span className="small faint">Tap an exercise to change its sets, target or how to beat it.</span>}
+        </section>
 
-      {err && <p className="small banner">{err}</p>}
-      <div className="row sheet-footer">
-        <button className="btn ghost grow" onClick={close}>
-          Cancel
-        </button>
-        <button className="btn primary grow" onClick={save} disabled={busy}>
-          Save plan
-        </button>
+        <section className="group" aria-label="Add exercises">
+          <div className="group-head">
+            <h2>Add exercises</h2>
+          </div>
+          <ExercisePicker game={game} locationId={locationId} added={new Set(items.map((i) => i.exerciseId))} onAdd={(it) => setItems((c) => (c.some((x) => x.exerciseId === it.exerciseId) ? c : [...c, it]))} />
+        </section>
       </div>
-      {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} beat={d.beatOf(measuring)} onClose={() => setMeasuring(null)} />}
-    </Sheet>
+      <footer className="page-foot" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        {err && (
+          <p className="small banner" role="alert">
+            {err}
+          </p>
+        )}
+        <button className="btn primary big" onClick={save} disabled={busy}>
+          Save plan{items.length ? ` (${items.length} ${items.length === 1 ? 'exercise' : 'exercises'})` : ''}
+        </button>
+      </footer>
+      {editing && configuring !== null && EXERCISE_BY_ID[editing.exerciseId] && (
+        <ConfigSheet
+          game={game}
+          ex={EXERCISE_BY_ID[editing.exerciseId]}
+          item={editing}
+          okLabel="Save"
+          onClose={(next) => {
+            const at = configuring;
+            setConfiguring(null);
+            if (next) setItems((c) => c.map((x, j) => (j === at ? next : x)));
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -328,6 +358,7 @@ function ImportSheet({ game, to, onClose }: { game: Game; to: Location; onClose:
   const [from, setFrom] = useState<string | null>(others[0]?.id ?? (orphans.length ? GONE : null));
   const [busy, setBusy] = useState(false);
   const list = from === GONE ? orphans : from ? plansAt(game.plans, from, game.planUsed) : [];
+  const doable = new Set(availableExercises(game.d!.unlocked, to.equipment).map((e) => e.id));
   return (
     <Sheet onClose={() => onClose()}>
       <h2>Import a plan into {to.name}</h2>
@@ -336,52 +367,55 @@ function ImportSheet({ game, to, onClose }: { game: Game; to: Location; onClose:
         <p className="muted">No other place has plans yet.</p>
       ) : (
         <>
-          <span className="tiny muted">1. From which place?</span>
-          <div className="row wrap" role="radiogroup" aria-label="Import from place">
+          <span className="tiny">From which place?</span>
+          <div className="chips" role="radiogroup" aria-label="Import from place">
             {others.map((l) => (
               <button key={l.id} role="radio" aria-checked={from === l.id} className={`chip ${from === l.id ? 'on' : ''}`} onClick={() => setFrom(l.id)}>
-                {placeIcon(l)} {l.name}
+                <PlaceIcon kind={l.kind} /> {l.name}
               </button>
             ))}
             {orphans.length > 0 && (
               <button role="radio" aria-checked={from === GONE} className={`chip ${from === GONE ? 'on' : ''}`} onClick={() => setFrom(GONE)}>
-                🗑 Deleted places
+                <Trash2 size={16} aria-hidden /> Deleted places
               </button>
             )}
           </div>
-          <span className="tiny muted">2. Which plan?</span>
-          {list.map((p) => {
-            const missing = p.items.filter((i) => !availableExercises(game.d!.unlocked, to.equipment).some((e) => e.id === i.exerciseId)).length;
-            return (
-              <button
-                key={p.id}
-                className="plan-row"
-                disabled={busy}
-                aria-label={`Import ${p.name}`}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const id = await importPlan(p.id, to.id);
-                    onClose(id, p.name);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <span className="grow stack" style={{ gap: 2 }}>
-                  <b>{p.name}</b>
-                  {p.description && <span className="small muted clamp1">{p.description}</span>}
-                  <span className="tiny muted">
-                    {p.items.length} exercises{missing ? ` · ${missing} not doable at ${to.name} (edit after import)` : ''}
+          <span className="tiny">Which plan?</span>
+          <div className="list">
+            {list.map((p) => {
+              const missing = p.items.filter((i) => !doable.has(i.exerciseId)).length;
+              return (
+                <button
+                  key={p.id}
+                  className="row-item"
+                  disabled={busy}
+                  aria-label={`Import ${p.name}`}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      onClose(await importPlan(p.id, to.id), p.name);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <span className="meta">
+                    <b>{p.name}</b>
+                    {p.description && <span className="sub clamp1">{p.description}</span>}
+                    <span className="small faint">
+                      {p.items.length} exercises{missing ? ` · ${missing} not doable at ${to.name} (edit after import)` : ''}
+                    </span>
                   </span>
-                </span>
-                <span className="badge">Import</span>
-              </button>
-            );
-          })}
+                  <span className="badge accent">
+                    <Download size={14} aria-hidden /> Import
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </>
       )}
-      <button className="btn ghost" onClick={() => onClose()}>
+      <button className="btn secondary" onClick={() => onClose()}>
         Close
       </button>
     </Sheet>

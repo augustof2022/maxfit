@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { beep, buzz } from '../lib/alarm';
 import { reducedMotion } from './ui';
+import { Square, X } from './Icon';
 
 function fmt(sec: number, tenths: boolean): string {
   const m = Math.floor(sec / 60);
@@ -91,7 +92,7 @@ export function TimerOverlay({
         ) : (
           // Before GO, cancel at once; after GO, ask first (the time would be lost).
           <button className="btn ghost timer-small" onClick={() => (startAt === null ? onCancel() : setAsking(true))}>
-            ✕ Cancel
+            <X size={18} aria-hidden /> Cancel
           </button>
         )}
       </div>
@@ -115,7 +116,7 @@ export function TimerOverlay({
         </div>
       )}
       <button ref={stopRef} className="timer-stop" onClick={stop} disabled={startAt === null} aria-label="Stop the timer">
-        ■ STOP
+        <Square size={36} fill="currentColor" aria-hidden /> STOP
       </button>
     </div>
   );

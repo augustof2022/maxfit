@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { applyWebUpdate, checkApkUpdate, installApk, onWebUpdate, startWebUpdates, webUpdateReady, type ApkUpdate } from '../lib/update';
 import { Bar } from './ui';
+import { Ico, RefreshCw } from './Icon';
 
 const RECHECK_MS = 30 * 60_000;
 // Module level: the bar remounts on every tab change; do not re-ask GitHub each time.
@@ -54,9 +55,12 @@ export function UpdateBar() {
 
   return (
     <div className="update-bar" role="status">
+      <span className="ico sm good" aria-hidden>
+        <Ico as={RefreshCw} size={18} />
+      </span>
       <div className="grow stack" style={{ gap: 4 }}>
         <b className="small">{apk ? `New version ready${apk.version ? ` (v${apk.version}, build ${apk.build})` : ''}` : 'New version ready'}</b>
-        {pct !== null ? <Bar value={pct} max={100} tone="good" label="Downloading update" /> : <span className="tiny muted">{msg ?? 'Your data stays on the phone.'}</span>}
+        {pct !== null ? <Bar value={pct} max={100} tone="good" label="Downloading update" /> : <span className="note">{msg ?? 'Your data stays on the phone.'}</span>}
       </div>
       <button className="btn good" onClick={update} disabled={pct !== null}>
         {pct !== null ? `${pct}%` : 'Update'}

@@ -6,6 +6,10 @@ import { EQUIPMENT } from '../core/equipment';
 import { activeSeconds, newLive, switchMode, totals } from '../core/live';
 import {
   availableExercises,
+  deriveGame,
+  starterPlan,
+  suggestedPlan,
+  visibleUnlocks,
   buildStats,
   challengeMet,
   computeRecords,
@@ -146,6 +150,8 @@ export async function updateSettings(patch: Partial<Settings>): Promise<void> {
 export async function saveLocation(loc: Omit<Location, "updatedAt" | "id"> & { id?: string }): Promise<string> {
   const id = loc.id || uid();
   await db.locations.put({ ...loc, id, updatedAt: Date.now() });
+  // A new place starts with its own Starter plan (round 5: no workout without a plan).
+  await ensureStarterPlans();
   return id;
 }
 
@@ -229,6 +235,49 @@ export async function savePlan(draft: PlanDraft): Promise<string> {
       : { id, name: clean.name, description: clean.description, locationId: clean.locationId, items, createdAt: now, lastUsedAt: null, lastViewedAt: null, updatedAt: now };
     await db.plans.put(row);
     return id;
+  });
+}
+
+/** The default plan of a place has a fixed id, so two devices (or a reinstall) never make two of it. */
+export const starterPlanId = (locationId: string) => `starter-${locationId}`;
+
+/**
+ * Every place gets one real, editable default plan named "Starter plan" (Renz, 2026-11-18, round 5:
+ * no workout without a plan). Made once per place from the starter logic (short: at most 3 exercises).
+ * A row that exists — even a deleted one — is never made again, so deleting it sticks. Seed rows use
+ * updatedAt 0 (like the seed places), so a real copy from the cloud always wins over them.
+ */
+export async function ensureStarterPlans(now = Date.now()): Promise<number> {
+  return db.transaction('rw', [db.plans, db.profile, db.locations, db.sessions, db.sets], async () => {
+    const profile = await getProfile();
+    const places = (await db.locations.toArray()).filter((l) => !l.deleted);
+    const sessions = await db.sessions.toArray();
+    const sets = (await db.sets.toArray()).filter((x) => !x.deleted);
+    const { unlocked: all, stats } = deriveGame(profile, sessions, sets, now);
+    const owned = ownedEquipment(places);
+    const unlocked = visibleUnlocks(all, (e) => fitsEquipment(e, owned), profile.revealed);
+    let made = 0;
+    for (const loc of places) {
+      const id = starterPlanId(loc.id);
+      if (await db.plans.get(id)) continue;
+      const here = availableExercises(unlocked, loc.equipment);
+      const pick = starterPlan(here, stats.sessions, profile.goals, profile.focus);
+      const items = (pick.length ? pick : suggestedPlan(here, profile.goals, profile.focus, 3)).slice(0, 3);
+      if (!items.length) continue;
+      await db.plans.put({
+        id,
+        name: 'Starter plan',
+        description: 'Short on purpose: a few exercises to build the habit. Edit, rename or delete it.',
+        locationId: loc.id,
+        items: items.map((it) => ({ exerciseId: it.exerciseId, sets: it.sets, target: {} })),
+        createdAt: now,
+        lastUsedAt: null,
+        lastViewedAt: null,
+        updatedAt: 0,
+      });
+      made++;
+    }
+    return made;
   });
 }
 

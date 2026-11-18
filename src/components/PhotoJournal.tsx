@@ -16,6 +16,7 @@ import { saveFile, shareFile } from '../lib/native';
 import { loadImage, renderPhoto, shrink, SIZES, TEMPLATES, type PhotoSize, type PhotoTemplate, type StatLine } from '../lib/photoCard';
 import { confirmAsk } from './Confirm';
 import { IconBtn, Sheet } from './ui';
+import { Camera, Check, Download, Ico, ImageIcon, Lock, Pencil, Share2 } from './Icon';
 
 /** The workout day a photo is about: today's finished sessions, or else the last one. */
 function refDay(game: Game) {
@@ -81,32 +82,46 @@ export function PhotoJournal({ game }: { game: Game }) {
   };
 
   return (
-    <section className="card stack" aria-label="Progress photos">
-      <div className="row between">
+    <section className="group" aria-label="Progress photos">
+      <div className="group-head">
         <h2>Progress photos</h2>
-        <span className="tiny muted">On this phone only</span>
+        <span className="private-note">
+          <Ico as={Lock} size={14} />
+          On this phone only
+        </span>
       </div>
-      <p className="small muted">Take a photo, put your stats on it, then save or share it as a story or post. Each one is kept here so you can see your change. They are not in the cloud or in backups: tap Save to keep a copy in your gallery.</p>
-      <div className="row">
-        <button className="btn primary grow" onClick={() => pick(true)}>
-          📷 Take photo
-        </button>
-        <button className="btn ghost grow" onClick={() => pick(false)}>
-          🖼️ Choose photo
-        </button>
-      </div>
-      {photos.length > 0 && (
-        <div className="photo-grid">
-          {photos.map((ph) => (
-            <Thumb key={ph.id} photo={ph} onClick={() => setView(ph)} />
-          ))}
+      <div className="card stack">
+        {photos.length === 0 ? (
+          <div className="photo-empty">
+            <span className="ico muted">
+              <Ico as={Camera} />
+            </span>
+            <p>Take a photo and put your stats on it, then save or share it as a story or post. Each one is kept here so you can see your change.</p>
+          </div>
+        ) : (
+          <div className="photo-grid">
+            {photos.map((ph) => (
+              <Thumb key={ph.id} photo={ph} onClick={() => setView(ph)} />
+            ))}
+          </div>
+        )}
+        <div className="photo-actions">
+          <button className="btn primary" onClick={() => pick(true)}>
+            <Ico as={Camera} size={18} />
+            Take photo
+          </button>
+          <button className="btn secondary" onClick={() => pick(false)}>
+            <Ico as={ImageIcon} size={18} />
+            Choose photo
+          </button>
         </div>
-      )}
-      {photos.length >= 2 && (
-        <button className="btn ghost" onClick={() => setCompare([photos[photos.length - 1], photos[0]])}>
-          Compare first and latest
-        </button>
-      )}
+        {photos.length >= 2 && (
+          <button className="btn secondary" onClick={() => setCompare([photos[photos.length - 1], photos[0]])}>
+            Compare first and latest
+          </button>
+        )}
+        <p className="note faint">Photos are not in the cloud or in backups. Tap Save to keep a copy in your gallery.</p>
+      </div>
 
       {compose && <Composer game={game} file={compose.file} photo={compose.photo} onClose={() => setCompose(null)} />}
       {view && (
@@ -135,7 +150,7 @@ function Thumb({ photo, onClick }: { photo: Photo; onClick: () => void }) {
   return (
     <button className="photo-thumb" onClick={onClick} aria-label={`Photo from ${new Date(photo.at).toLocaleDateString()}`}>
       {url && <img src={url} alt="" />}
-      <span className="tiny">{new Date(photo.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+      <span className="tiny num">{new Date(photo.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
     </button>
   );
 }
@@ -234,22 +249,31 @@ function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; phot
       <div className="photo-preview" style={{ aspectRatio: `1 / ${ratio}`, width: `min(100%, calc(52dvh / ${ratio}))` }}>
         {preview ? <img src={preview} alt="Preview with your stats" /> : <span className="muted small">{err ?? 'Preparing…'}</span>}
       </div>
+      <div className="composer-section">
+      <span className="field-label">Size</span>
       <div className="seg" role="radiogroup" aria-label="Size">
         {(Object.keys(SIZES) as PhotoSize[]).map((k) => (
-          <button key={k} role="radio" aria-checked={size === k} className={`chip ${size === k ? 'on' : ''}`} onClick={() => setSize(k)}>
+          <button key={k} role="radio" aria-checked={size === k} onClick={() => setSize(k)}>
             {SIZES[k].label}
           </button>
         ))}
       </div>
+      </div>
+      <div className="composer-section">
+      <span className="field-label">Look</span>
       <div className="seg" role="radiogroup" aria-label="Look">
         {TEMPLATES.map((t) => (
-          <button key={t.id} role="radio" aria-checked={template === t.id} className={`chip ${template === t.id ? 'on' : ''}`} onClick={() => setTemplate(t.id)}>
+          <button key={t.id} role="radio" aria-checked={template === t.id} onClick={() => setTemplate(t.id)}>
             {t.name}
           </button>
         ))}
       </div>
-      <span className="tiny muted">Stats on the photo (up to 6)</span>
-      <div className="row wrap" role="group" aria-label="Stats">
+      </div>
+      <div className="composer-section">
+      <span className="field-label">
+        Stats on the photo <span className="faint num">({on.length} of 6)</span>
+      </span>
+      <div className="chips wrap" role="group" aria-label="Stats">
         {(photo ? [...photo.stats, ...options.filter((o) => !photo.stats.some((s) => s.key === o.key))] : options).map((o) => (
           <button
             key={o.key}
@@ -257,49 +281,57 @@ function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; phot
             aria-pressed={on.includes(o.key)}
             onClick={() => setOn((cur) => (cur.includes(o.key) ? cur.filter((k) => k !== o.key) : cur.length >= 6 ? cur : [...cur, o.key]))}
           >
+            {on.includes(o.key) && <Ico as={Check} size={14} />}
             {o.label}
           </button>
         ))}
       </div>
+      </div>
       {didAll.length > 0 || fresh.all.length > 0 ? (
-        <div className="stack" style={{ gap: 6 }}>
-          <button className={`chip ${didOn ? 'on' : ''}`} aria-pressed={didOn} onClick={() => setDidOn((v) => !v)} style={{ alignSelf: 'flex-start' }}>
-            {didOn ? '✓ ' : ''}"I did" list on the photo
-          </button>
+        <div className="composer-section">
+          <label className="toggle-row card flat" style={{ padding: '0 var(--s4)' }}>
+            <span className="stack" style={{ gap: 2 }}>
+              <b>"I did" list on the photo</b>
+              <span className="note num">
+                {didAll.length} exercise{didAll.length === 1 ? '' : 's'}
+                {didAll.length > 6 ? ' (the photo shows up to 6)' : ''}
+              </span>
+            </span>
+            <input type="checkbox" role="switch" checked={didOn} onChange={() => setDidOn((v) => !v)} />
+          </label>
           {didOn && !kept && (
             <div className="seg" role="radiogroup" aria-label="I did: which exercises">
-              <button role="radio" aria-checked={didMode === 'all'} className={`chip ${didMode === 'all' ? 'on' : ''}`} onClick={() => setDidMode('all')}>
-                {isToday ? 'All exercises today' : 'All exercises (last workout)'}
+              <button role="radio" aria-checked={didMode === 'all'} onClick={() => setDidMode('all')}>
+                {isToday ? 'All today' : 'All (last workout)'}
               </button>
-              <button role="radio" aria-checked={didMode === 'records'} aria-disabled={fresh.records.length === 0} disabled={fresh.records.length === 0} className={`chip ${didMode === 'records' ? 'on' : ''}`} onClick={() => setDidMode('records')}>
+              <button role="radio" aria-checked={didMode === 'records'} aria-disabled={fresh.records.length === 0} disabled={fresh.records.length === 0} onClick={() => setDidMode('records')}>
                 Only records
               </button>
             </div>
           )}
-          {didOn && !kept && fresh.records.length === 0 && <span className="tiny muted did-note">No records that day, so "Only records" is off.</span>}
-          {didOn && kept && <span className="tiny muted did-note">Kept as saved on that day.</span>}
-          {didOn && <span className="tiny muted did-note">{didAll.length} exercise{didAll.length === 1 ? '' : 's'}{didAll.length > 6 ? ' (the photo shows up to 6)' : ''}</span>}
+          {didOn && !kept && fresh.records.length === 0 && <span className="note faint">No records that day, so "Only records" is off.</span>}
+          {didOn && kept && <span className="note faint">Kept as saved on that day.</span>}
         </div>
       ) : null}
       <label className="field">
         Caption (optional)
         <input className="input" maxLength={40} value={note} placeholder="e.g. Week 4. Still showing up." onChange={(e) => setNote(e.target.value)} />
       </label>
+      <p className="note faint">Share opens your phone's menu: pick Instagram, then Story or Post. Weight and BMI are off unless you tick them.</p>
       {err && <p className="small banner">{err}</p>}
       <div className="row sheet-footer">
-        <button className="btn ghost" onClick={onClose}>
+        <button className="btn secondary" onClick={onClose}>
           Close
         </button>
-        <button className="btn ghost grow" onClick={() => act('save')} disabled={!out || busy}>
-          ⬇ Save
+        <button className="btn secondary grow" onClick={() => act('save')} disabled={!out || busy}>
+          <Ico as={Download} size={18} />
+          <span className="vh">⬇ </span>Save
         </button>
         <button className="btn primary grow" onClick={() => act('share')} disabled={!out || busy}>
-          ↗ Share
+          <Ico as={Share2} size={18} />
+          Share
         </button>
       </div>
-      <p className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-        Share opens your phone's menu: pick Instagram, then Story or Post. Weight and BMI are off unless you tick them.
-      </p>
     </Sheet>
   );
 }
@@ -310,17 +342,18 @@ function PhotoView({ photo, onClose, onEdit }: { photo: Photo; onClose: () => vo
   const name = `maxfit-${dayKey(photo.at)}.jpg`;
   return (
     <Sheet onClose={onClose}>
-      <div className="row between">
+      <div className="sheet-title">
         <h2>{new Date(photo.at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</h2>
         <IconBtn label="Edit photo" onClick={onEdit}>
-          ✎ Edit
+          <Ico as={Pencil} size={16} />
+          Edit
         </IconBtn>
       </div>
       <div className="photo-preview" style={{ aspectRatio: `1 / ${SIZES[photo.size].h / SIZES[photo.size].w}`, width: `min(100%, calc(60dvh / ${SIZES[photo.size].h / SIZES[photo.size].w}))` }}>
         {url && <img src={url} alt="Progress photo" />}
       </div>
       {msg && <p className="small banner">{msg}</p>}
-      <div className="row">
+      <div className="row sheet-footer">
         <button
           className="btn danger"
           onClick={async () => {
@@ -331,11 +364,13 @@ function PhotoView({ photo, onClose, onEdit }: { photo: Photo; onClose: () => vo
         >
           Delete
         </button>
-        <button className="btn ghost grow" onClick={async () => setMsg(await saveFile(photo.composite ?? photo.image, name, 'pictures').catch((e) => (e as Error).message))}>
-          ⬇ Save
+        <button className="btn secondary grow" onClick={async () => setMsg(await saveFile(photo.composite ?? photo.image, name, 'pictures').catch((e) => (e as Error).message))}>
+          <Ico as={Download} size={18} />
+          <span className="vh">⬇ </span>Save
         </button>
         <button className="btn primary grow" onClick={() => void shareFile(photo.composite ?? photo.image, name).catch(() => undefined)}>
-          ↗ Share
+          <Ico as={Share2} size={18} />
+          Share
         </button>
       </div>
     </Sheet>
@@ -348,8 +383,10 @@ function CompareView({ a, b, photos, onClose, onPick }: { a: Photo; b: Photo; ph
   const days = Math.round((b.at - a.at) / 86_400_000);
   return (
     <Sheet onClose={onClose}>
-      <h2>Then and now</h2>
-      <p className="small muted">{days} days apart</p>
+      <div className="stack" style={{ gap: 2 }}>
+        <h2>Then and now</h2>
+        <p className="note num">{days} days apart</p>
+      </div>
       <div className="compare">
         {[
           [a, ua],
@@ -357,7 +394,7 @@ function CompareView({ a, b, photos, onClose, onPick }: { a: Photo; b: Photo; ph
         ].map(([p, u], i) => (
           <figure key={i}>
             {u && <img src={u as string} alt="" />}
-            <figcaption className="tiny">{new Date((p as Photo).at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</figcaption>
+            <figcaption className="note num">{new Date((p as Photo).at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</figcaption>
           </figure>
         ))}
       </div>
@@ -371,7 +408,7 @@ function CompareView({ a, b, photos, onClose, onPick }: { a: Photo; b: Photo; ph
           ))}
         </select>
       </label>
-      <button className="btn ghost" onClick={onClose}>
+      <button className="btn secondary" onClick={onClose}>
         Close
       </button>
     </Sheet>

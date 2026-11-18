@@ -11,6 +11,7 @@ import { GoalPicker } from '../components/GoalPicker';
 import { Avatar, AVATAR_STYLES } from '../components/Avatar';
 import { COLORS, GOAL_TARGETS, goalFor, suggestedRestSec } from '../core/rules';
 import { saveFile } from '../lib/native';
+import { ChevronRight, Download, Ico, PlaceIcon, Plus, Star, Upload, X } from '../components/Icon';
 import { appVersion } from '../lib/update';
 import type { Game } from '../data/useGame';
 import { alarm, primeAudio } from '../lib/alarm';
@@ -32,126 +33,155 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
   return (
     <div className="stack screen">
-      <h1>Settings</h1>
+      <header className="screen-head">
+        <h1>Settings</h1>
+      </header>
 
-      <section className="card stack">
-        <h2>You</h2>
-        <label className="field">
-          Name (shown on Home)
-          <input className="input" value={p.name} onChange={(e) => updateProfile({ name: e.target.value })} />
-        </label>
-        <span className="tiny muted">Gender (sets your avatar's body)</span>
-        <div className="seg" role="radiogroup" aria-label="Gender">
-          {(['male', 'female'] as const).map((g) => (
-            <button key={g} role="radio" aria-checked={(p.gender ?? 'male') === g} className={`chip ${(p.gender ?? 'male') === g ? 'on' : ''}`} onClick={() => updateProfile({ gender: g })}>
-              {g === 'male' ? 'Male' : 'Female'}
-            </button>
-          ))}
+      <section className="group" aria-label="You">
+        <div className="group-head">
+          <h2>You</h2>
+        </div>
+        <div className="card stack">
+          <label className="field">
+            Name (shown on Home)
+            <input className="input" value={p.name} placeholder="Your first name" onChange={(e) => updateProfile({ name: e.target.value })} />
+          </label>
+          <span className="field-label">Gender (sets your avatar's body)</span>
+          <div className="seg" role="radiogroup" aria-label="Gender">
+            {(['male', 'female'] as const).map((g) => (
+              <button key={g} role="radio" aria-checked={(p.gender ?? 'male') === g} onClick={() => updateProfile({ gender: g })}>
+                {g === 'male' ? 'Male' : 'Female'}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="card stack" aria-label="Goals">
-        <h2>Your goals</h2>
-        <GoalPicker key={`${(p.goals ?? []).join()}|${(p.focus ?? []).join()}`} goals={p.goals ?? []} focus={p.focus ?? []} onSaved={() => toast('Goals saved')} />
+      <section className="group" aria-label="Goals">
+        <div className="group-head">
+          <h2>Your goals</h2>
+        </div>
+        <div className="card">
+          <GoalPicker key={`${(p.goals ?? []).join()}|${(p.focus ?? []).join()}`} goals={p.goals ?? []} focus={p.focus ?? []} onSaved={() => toast('Goals saved')} />
+        </div>
       </section>
 
-      <section className="card stack" aria-label="Avatar style">
-        <h2>Avatar style</h2>
-        <p className="small muted">Three looks. It trains when you train.</p>
-        <div className="seg" role="radiogroup" aria-label="Avatar style">
+      <section className="group" aria-label="Avatar style">
+        <div className="group-head">
+          <h2>Avatar style</h2>
+        </div>
+        <p className="group-note">Three looks. It trains when you train.</p>
+        <div className="avatar-styles" role="radiogroup" aria-label="Avatar style">
           {AVATAR_STYLES.map((st) => (
-            <button key={st.id} role="radio" aria-checked={(p.avatarStyle ?? 'athlete') === st.id} className={`card flat stack style-pick ${(p.avatarStyle ?? 'athlete') === st.id ? 'on' : ''}`} onClick={() => updateProfile({ avatarStyle: st.id })}>
-              <Avatar stage={d.stage} gear={d.gear} color={color} size={86} style={st.id} gender={p.gender} action="demo" />
+            <button key={st.id} role="radio" aria-checked={(p.avatarStyle ?? 'athlete') === st.id} className={`stack style-pick ${(p.avatarStyle ?? 'athlete') === st.id ? 'on' : ''}`} onClick={() => updateProfile({ avatarStyle: st.id })}>
+              <Avatar stage={d.stage} gear={d.gear} color={color} size={80} style={st.id} gender={p.gender} action="demo" />
               <b className="small">{st.name}</b>
-              <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                {st.blurb}
-              </span>
+              <span className="tiny">{st.blurb}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="card stack" aria-label="Locations">
-        <div className="row between">
+      <section className="group" aria-label="Locations">
+        <div className="group-head">
           <h2>My places</h2>
-          <button className="btn ghost" onClick={() => setEditing({ name: '', kind: 'gym', equipment: [] })}>
-            + New place
+          <button className="btn quiet" onClick={() => setEditing({ name: '', kind: 'gym', equipment: [] })}>
+            <Ico as={Plus} size={18} />
+            <span className="vh">+ </span>New place
           </button>
         </div>
-        <p className="small muted">Name a place and pick its equipment once. When you train there, MaxFit loads it and shows only exercises you can do.</p>
-        {game.locations.map((l) => {
-          const names = knownEquipment(l.equipment, game.customEquipment).map((id) => equipmentName(id, game.customEquipment));
-          return (
-            <button key={l.id} className="card flat row between" style={{ textAlign: 'left' }} onClick={() => setEditing(l)}>
-              <span className="grow">
-                <b>{l.name}</b>
-                <br />
-                <span className="small muted">{names.length ? `${names.length} items: ${names.slice(0, 4).join(', ')}${names.length > 4 ? '…' : ''}` : 'Bodyweight only'}</span>
-              </span>
-              <span className="muted">Edit ›</span>
-            </button>
-          );
-        })}
+        <p className="group-note">Name a place and pick its equipment once. When you train there, MaxFit loads it and shows only exercises you can do.</p>
+        <div className="list">
+          {game.locations.length === 0 && <p className="empty">No places yet. Add Home or your gym, and pick what equipment is there.</p>}
+          {game.locations.map((l) => {
+            const names = knownEquipment(l.equipment, game.customEquipment).map((id) => equipmentName(id, game.customEquipment));
+            return (
+              <button key={l.id} className="row-item" onClick={() => setEditing(l)} aria-label={`Edit place ${l.name}`}>
+                <span className="ico">
+                  <PlaceIcon kind={l.kind} size={20} />
+                </span>
+                <span className="meta">
+                  <b>{l.name}</b>
+                  <span className="sub clamp1">{names.length ? `${names.length} item${names.length === 1 ? '' : 's'}: ${names.slice(0, 4).join(', ')}${names.length > 4 ? '…' : ''}` : 'Bodyweight only'}</span>
+                </span>
+                <Ico as={ChevronRight} className="chev" />
+              </button>
+            );
+          })}
+        </div>
       </section>
 
-      <section className="card stack" aria-label="Equipment library">
-        <h2>Equipment library</h2>
-        <p className="small muted">
+      <section className="group" aria-label="Equipment library">
+        <div className="group-head">
+          <h2>Equipment library</h2>
+        </div>
+        <p className="group-note">
           {EQUIPMENT.length} built-in items in {CATEGORIES.length} groups. Add your own from any place's editor.
         </p>
-        {game.customEquipment.filter((e) => !e.deleted).length === 0 ? (
-          <p className="small muted">No items of your own yet.</p>
-        ) : (
-          game.customEquipment
-            .filter((e) => !e.deleted)
-            .map((e) => (
-              <div key={e.id} className="row between small">
-                <span>
-                  ★ {e.name} <span className="muted">· {CATEGORIES.find((c) => c.id === e.category)?.name}</span>
-                </span>
-                <button
-                  className="btn ghost"
-                  style={{ minWidth: 44, padding: '4px 10px' }}
-                  aria-label={`Remove ${e.name} from library`}
-                  onClick={async () => {
-                    if (await confirmAsk({ title: `Remove "${e.name}"?`, body: 'It is also removed from every place that has it.', ok: 'Remove', danger: true })) await deleteEquipment(e.id);
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))
-        )}
+        <div className="list">
+          {game.customEquipment.filter((e) => !e.deleted).length === 0 ? (
+            <p className="empty">No items of your own yet. Open a place and tap "Add new equipment" if something is missing.</p>
+          ) : (
+            game.customEquipment
+              .filter((e) => !e.deleted)
+              .map((e) => (
+                <div key={e.id} className="row-item">
+                  <span className="ico gold">
+                    <Ico as={Star} />
+                  </span>
+                  <span className="meta">
+                    <b>{e.name}</b>
+                    <span className="sub">{CATEGORIES.find((c) => c.id === e.category)?.name}</span>
+                  </span>
+                  <button
+                    className="btn secondary icon"
+                    aria-label={`Remove ${e.name} from library`}
+                    onClick={async () => {
+                      if (await confirmAsk({ title: `Remove "${e.name}"?`, body: 'It is also removed from every place that has it.', ok: 'Remove', danger: true })) await deleteEquipment(e.id);
+                    }}
+                  >
+                    <Ico as={X} size={18} />
+                  </button>
+                </div>
+              ))
+          )}
+        </div>
       </section>
 
-      <section className="card stack" aria-label="Rest alarm">
-        <h2>Rest alarm</h2>
-        <Stepper label="Alarm when rest is longer than" unit="sec" value={s.restLimitSec} step={15} min={15} onChange={(v) => updateSettings({ restLimitSec: Math.max(15, v) })} />
-        <p className="small muted">For muscle growth, a common guide is 1–2 minutes between sets (ACSM). Start at 90 seconds.</p>
-        {(() => {
-          const sug = suggestedRestSec(p.goals ?? []);
-          const g = goalFor(null, p.goals ?? []);
-          if (!sug || !g || sug === s.restLimitSec) return null;
-          return (
-            <div className="row between banner small">
-              <span>
-                For your goal ({GOAL_TARGETS[g].label}): rest about <b>{sug} s</b>.
-              </span>
-              <button
-                className="btn ghost icon-btn"
-                onClick={async () => {
-                  if (await confirmAsk({ title: `Set the rest alarm to ${sug} s?`, body: `Now ${s.restLimitSec} s. You can change it back any time.`, ok: 'Apply' })) await updateSettings({ restLimitSec: sug });
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          );
-        })()}
-        <Toggle label="Sound" on={s.sound} set={(v) => updateSettings({ sound: v })} />
-        <Toggle label="Vibrate" on={s.vibrate} set={(v) => updateSettings({ vibrate: v })} />
+      <section className="group" aria-label="Rest alarm">
+        <div className="group-head">
+          <h2>Rest alarm</h2>
+        </div>
+        <div className="card stack">
+          <Stepper label="Alarm when rest is longer than" unit="sec" value={s.restLimitSec} step={15} min={15} onChange={(v) => updateSettings({ restLimitSec: Math.max(15, v) })} />
+          <p className="note">For muscle growth, a common guide is 1–2 minutes between sets (ACSM). Start at 90 seconds.</p>
+          {(() => {
+            const sug = suggestedRestSec(p.goals ?? []);
+            const g = goalFor(null, p.goals ?? []);
+            if (!sug || !g || sug === s.restLimitSec) return null;
+            return (
+              <div className="row between banner small">
+                <span>
+                  For your goal ({GOAL_TARGETS[g].label}): rest about <b className="num">{sug} s</b>.
+                </span>
+                <button
+                  className="btn secondary icon-btn"
+                  onClick={async () => {
+                    if (await confirmAsk({ title: `Set the rest alarm to ${sug} s?`, body: `Now ${s.restLimitSec} s. You can change it back any time.`, ok: 'Apply' })) await updateSettings({ restLimitSec: sug });
+                  }}
+                >
+                  Apply
+                </button>
+              </div>
+            );
+          })()}
+        </div>
+        <div className="list">
+          <Toggle label="Sound" on={s.sound} set={(v) => updateSettings({ sound: v })} />
+          <Toggle label="Vibrate" on={s.vibrate} set={(v) => updateSettings({ vibrate: v })} />
+        </div>
         <button
-          className="btn ghost"
+          className="btn secondary"
           onClick={() => {
             primeAudio();
             alarm(s);
@@ -161,65 +191,75 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         </button>
       </section>
 
-      <section className="card stack" aria-label="Reminders">
-        <h2>Reminders</h2>
-        {!isNative && <p className="small banner">In the web app, reminders show only while MaxFit is open. Install the Android app for alarms that ring when it is closed.</p>}
-        <Toggle label="Remind me to train" on={s.workoutReminder.enabled} set={async (v) => { if (v) await askPermission(); updateSettings({ workoutReminder: { ...s.workoutReminder, enabled: v } }); }} />
-        {s.workoutReminder.enabled && (
-          <>
-            <label className="field">
-              Time
-              <input className="input" type="time" value={s.workoutReminder.time} onChange={(e) => updateSettings({ workoutReminder: { ...s.workoutReminder, time: e.target.value } })} />
-            </label>
-            <div className="row wrap">
-              {DAYS.map((d, i) => {
-                const on = s.workoutReminder.days.includes(i);
-                return (
-                  <button key={d} className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => updateSettings({ workoutReminder: { ...s.workoutReminder, days: on ? s.workoutReminder.days.filter((x) => x !== i) : [...s.workoutReminder.days, i] } })}>
-                    {d}
-                  </button>
-                );
-              })}
+      <section className="group" aria-label="Reminders">
+        <div className="group-head">
+          <h2>Reminders</h2>
+        </div>
+        {!isNative && <p className="group-note">In the web app, reminders show only while MaxFit is open. Install the Android app for alarms that ring when it is closed.</p>}
+        <div className="list">
+          <Toggle label="Remind me to train" on={s.workoutReminder.enabled} set={async (v) => { if (v) await askPermission(); updateSettings({ workoutReminder: { ...s.workoutReminder, enabled: v } }); }} />
+          {s.workoutReminder.enabled && (
+            <div className="stack stack-pad">
+              <label className="field">
+                Time
+                <input className="input" type="time" value={s.workoutReminder.time} onChange={(e) => updateSettings({ workoutReminder: { ...s.workoutReminder, time: e.target.value } })} />
+              </label>
+              <span className="field-label">Days</span>
+              <div className="chips wrap">
+                {DAYS.map((d, i) => {
+                  const on = s.workoutReminder.days.includes(i);
+                  return (
+                    <button key={d} className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => updateSettings({ workoutReminder: { ...s.workoutReminder, days: on ? s.workoutReminder.days.filter((x) => x !== i) : [...s.workoutReminder.days, i] } })}>
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </>
-        )}
-        <hr />
-        <Toggle label="Remind me to weigh in" on={s.weighReminder.enabled} set={async (v) => { if (v) await askPermission(); updateSettings({ weighReminder: { ...s.weighReminder, enabled: v } }); }} />
-        {s.weighReminder.enabled && (
-          <div className="row">
-            <label className="field grow">
-              Day
-              <select className="input" value={s.weighReminder.day} onChange={(e) => updateSettings({ weighReminder: { ...s.weighReminder, day: Number(e.target.value) } })}>
-                {DAYS.map((d, i) => (
-                  <option key={d} value={i}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field grow">
-              Time
-              <input className="input" type="time" value={s.weighReminder.time} onChange={(e) => updateSettings({ weighReminder: { ...s.weighReminder, time: e.target.value } })} />
-            </label>
-          </div>
-        )}
+          )}
+          <Toggle label="Remind me to weigh in" on={s.weighReminder.enabled} set={async (v) => { if (v) await askPermission(); updateSettings({ weighReminder: { ...s.weighReminder, enabled: v } }); }} />
+          {s.weighReminder.enabled && (
+            <div className="row stack-pad">
+              <label className="field grow">
+                Day
+                <select className="input" value={s.weighReminder.day} onChange={(e) => updateSettings({ weighReminder: { ...s.weighReminder, day: Number(e.target.value) } })}>
+                  {DAYS.map((d, i) => (
+                    <option key={d} value={i}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field grow">
+                Time
+                <input className="input" type="time" value={s.weighReminder.time} onChange={(e) => updateSettings({ weighReminder: { ...s.weighReminder, time: e.target.value } })} />
+              </label>
+            </div>
+          )}
+        </div>
       </section>
 
-      <section className="card stack" aria-label="Daily goal">
-        <h2>Daily goal (habit builder)</h2>
-        <Stepper label="Start at" unit="min" value={p.habitBaseMin} step={5} min={5} onChange={(v) => updateProfile({ habitBaseMin: Math.max(5, v) })} />
-        <Stepper label="Grow up to" unit="min" value={p.habitCapMin} step={5} min={10} onChange={(v) => updateProfile({ habitCapMin: Math.max(10, v) })} />
-        <p className="small muted">The goal grows by 5 minutes after every 5 days you meet it. Rest days do not reset it; a missed week does.</p>
+      <section className="group" aria-label="Daily goal">
+        <div className="group-head">
+          <h2>Daily goal (habit builder)</h2>
+        </div>
+        <div className="card stack">
+          <Stepper label="Start at" unit="min" value={p.habitBaseMin} step={5} min={5} onChange={(v) => updateProfile({ habitBaseMin: Math.max(5, v) })} />
+          <Stepper label="Grow up to" unit="min" value={p.habitCapMin} step={5} min={10} onChange={(v) => updateProfile({ habitCapMin: Math.max(10, v) })} />
+          <p className="note">The goal grows by 5 minutes after every 5 days you meet it. Rest days do not reset it; a missed week does.</p>
+        </div>
       </section>
 
       <SyncCard toast={toast} />
 
-      <section className="card stack" aria-label="Backup">
-        <h2>Backup</h2>
-        <p className="small muted">Save a copy of all your data as a file, or restore one.</p>
+      <section className="group" aria-label="Backup">
+        <div className="group-head">
+          <h2>Backup</h2>
+        </div>
+        <p className="group-note">Save a copy of all your data as a file, or restore one.</p>
         <div className="row">
           <button
-            className="btn ghost grow"
+            className="btn secondary grow"
             onClick={async () => {
               try {
                 const blob = new Blob([await exportAll()], { type: 'application/json' });
@@ -229,9 +269,11 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
               }
             }}
           >
+            <Ico as={Download} size={18} />
             Export
           </button>
-          <label className="btn ghost grow" style={{ textAlign: 'center' }}>
+          <label className="btn secondary grow" style={{ textAlign: 'center' }}>
+            <Ico as={Upload} size={18} />
             Import
             <input
               type="file"
@@ -253,40 +295,45 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         </div>
       </section>
 
-      <section className="card stack" aria-label="Delete test data">
-        <h2>Delete my test data</h2>
-        <p className="small muted">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter exercises). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
-        <button
-          className="btn danger"
-          onClick={async () => {
-            if (!(await confirmAsk({ title: 'Delete all training data?', body: `${d.stats.sessions} sessions, their sets, and ${game.weights.length} weigh-ins. Your level and unlocks start again.`, ok: 'Continue', danger: true }))) return;
-            if (!(await confirmAsk({ title: 'Are you sure?', body: 'This cannot be undone. Export a backup first if you may want it back.', ok: 'Delete everything', danger: true }))) return;
-            await resetTrainingData();
-            toast('Training data deleted. Fresh start!');
-          }}
-        >
-          Delete test data
-        </button>
+      <section className="group" aria-label="Delete data">
+        <div className="group-head">
+          <h2>Delete data</h2>
+        </div>
+        <div className="card stack danger-zone">
+          <section className="stack" aria-label="Delete test data" style={{ gap: 'var(--s2)' }}>
+            <h3>Delete my test data</h3>
+            <p className="note">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter exercises). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
+            <button
+              className="btn danger"
+              onClick={async () => {
+                if (!(await confirmAsk({ title: 'Delete all training data?', body: `${d.stats.sessions} sessions, their sets, and ${game.weights.length} weigh-ins. Your level and unlocks start again.`, ok: 'Continue', danger: true }))) return;
+                if (!(await confirmAsk({ title: 'Are you sure?', body: 'This cannot be undone. Export a backup first if you may want it back.', ok: 'Delete everything', danger: true }))) return;
+                await resetTrainingData();
+                toast('Training data deleted. Fresh start!');
+              }}
+            >
+              Delete test data
+            </button>
+          </section>
+          <hr />
+          <section className="stack" aria-label="Erase" style={{ gap: 'var(--s2)' }}>
+            <h3>Erase this device</h3>
+            <p className="note">Removes all MaxFit data from this phone (cloud data stays). Progress photos are only on this phone and are deleted for good: save the ones you want to your gallery first. Use before someone else signs in here. Export a backup first.</p>
+            <button
+              className="btn danger"
+              onClick={async () => {
+                if (!(await confirmAsk({ title: 'Erase ALL MaxFit data on this device?', body: 'This cannot be undone. Cloud data stays, but progress photos (phone only) are deleted for good.', ok: 'Erase', danger: true }))) return;
+                await wipeLocal();
+                toast('This device was erased');
+              }}
+            >
+              Erase this device
+            </button>
+          </section>
+        </div>
       </section>
 
-      <section className="card stack" aria-label="Erase">
-        <h2>Erase this device</h2>
-        <p className="small muted">Removes all MaxFit data from this phone (cloud data stays). Progress photos are only on this phone and are deleted for good: save the ones you want to your gallery first. Use before someone else signs in here. Export a backup first.</p>
-        <button
-          className="btn danger"
-          onClick={async () => {
-            if (!(await confirmAsk({ title: 'Erase ALL MaxFit data on this device?', body: 'This cannot be undone. Cloud data stays, but progress photos (phone only) are deleted for good.', ok: 'Erase', danger: true }))) return;
-            await wipeLocal();
-            toast('This device was erased');
-          }}
-        >
-          Erase this device
-        </button>
-      </section>
-
-      <p className="tiny muted" style={{ textAlign: 'center' }}>
-        MaxFit {version} · Train like a game
-      </p>
+      <p className="foot-note num">MaxFit {version} · Train like a game</p>
 
       {editing && <PlaceEditor loc={editing} customEquipment={game.customEquipment} unlocked={d.unlockedAll} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
     </div>
@@ -295,9 +342,9 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
 function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) {
   return (
-    <label className="row between" style={{ minHeight: 44 }}>
+    <label className="toggle-row">
       <span>{label}</span>
-      <input type="checkbox" role="switch" checked={on} onChange={(e) => set(e.target.checked)} style={{ width: 24, height: 24, accentColor: 'var(--accent)' }} />
+      <input type="checkbox" role="switch" checked={on} onChange={(e) => set(e.target.checked)} />
     </label>
   );
 }
@@ -318,9 +365,11 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
 
   if (!syncConfigured)
     return (
-      <section className="card stack" aria-label="Cloud sync">
-        <h2>Cloud sync</h2>
-        <p className="small muted">This build has no cloud server set. Your data is saved on this device. Use Backup to keep a copy.</p>
+      <section className="group" aria-label="Cloud sync">
+        <div className="group-head">
+          <h2>Cloud sync</h2>
+        </div>
+        <p className="group-note">This build has no cloud server set. Your data is saved on this device. Use Backup to keep a copy.</p>
       </section>
     );
 
@@ -339,33 +388,36 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
   };
 
   return (
-    <section className="card stack" aria-label="Cloud sync">
-      <h2>Cloud sync</h2>
+    <section className="group" aria-label="Cloud sync">
+      <div className="group-head">
+        <h2>Cloud sync</h2>
+      </div>
+      <div className="card stack">
       {user ? (
         <>
           <p className="small">Signed in as {user}</p>
-          <p className="small muted">{last ? `Last sync ${new Date(last.at).toLocaleString()} · sent ${last.pushed}, got ${last.pulled}` : 'Not synced yet.'}</p>
+          <p className="note">{last ? `Last sync ${new Date(last.at).toLocaleString()} · sent ${last.pushed}, got ${last.pulled}` : 'Not synced yet.'}</p>
           {plansBlocked && <p className="small banner">Exercise plans are on this phone only until the cloud is updated (everything else syncs). Export a backup to keep them safe.</p>}
           <div className="row">
             <button className="btn primary grow" disabled={busy} onClick={() => run(syncNow, 'Synced')}>
               Sync now
             </button>
-            <button className="btn ghost" disabled={busy} onClick={() => run(signOut, 'Signed out')}>
+            <button className="btn secondary" disabled={busy} onClick={() => run(signOut, 'Signed out')}>
               Sign out
             </button>
           </div>
         </>
       ) : (
         <>
-          <p className="small muted">Sign in to back up to the cloud and use MaxFit on more than one device. The app still works offline.</p>
-          <input className="input" type="email" autoComplete="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="input" type="password" autoComplete="current-password" placeholder="Password (6+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <p className="note">Sign in to back up to the cloud and use MaxFit on more than one device. The app still works offline.</p>
+          <input className="input" type="email" autoComplete="email" aria-label="Email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className="input" type="password" autoComplete="current-password" aria-label="Password" placeholder="Password (6+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
           <div className="row">
             <button className="btn primary grow" disabled={busy || !email || pw.length < 6} onClick={() => run(async () => { await signIn(email, pw); await syncNow(); }, 'Signed in and synced')}>
               Sign in
             </button>
             <button
-              className="btn ghost grow"
+              className="btn secondary grow"
               disabled={busy || !email || pw.length < 6}
               onClick={() =>
                 run(async () => {
@@ -380,6 +432,7 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
           </div>
         </>
       )}
+      </div>
     </section>
   );
 }

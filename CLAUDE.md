@@ -75,6 +75,10 @@ Details: `docs/PRODUCT-SPEC.md`, `team/DECISIONS.md`.
 10. **Science first for training content.** New exercises, ladder order, unlock prerequisites and goal logic
     go through `exercise-scientist` first (Renz said, 2026-11-18: "strategic and science backed, not random").
 11. **Ripple check.** When Renz corrects one thing, fix it everywhere (code, docs, tests, copy).
+12. **Design skills.** All design and UI work uses the skills `taste-skill` and `impeccable` (load both
+    with the Skill tool before any design or UI work, and follow them) [Source: Renz said, 2026-11-18].
+    If a session cannot load them, say so as a capability gap and follow their sources plus
+    `docs/DESIGN.md` (the system built from them in round 5).
 
 ## How to run and check
 

@@ -1,0 +1,81 @@
+
+/* ---------- Avatar motion (src/components/Avatar.tsx) ----------
+   Joints rotate around their own point (set inline as transform-origin). --d = 1 left side, -1 right side,
+   so one keyframe serves both. Eased, calm loops; nothing flashes. */
+.av { overflow: visible; }
+.av g, .av path, .av ellipse { transform-box: view-box; }
+.av .j-eyes { animation: av-blink 4.6s infinite; }
+@keyframes av-blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+
+/* idle: breathing, a small sway */
+.av-idle .j-torso { animation: av-breathe 3.4s var(--ease-in-out) infinite; }
+.av-idle .j-head { animation: av-headbob 3.4s var(--ease-in-out) infinite; }
+.av-idle .j-arm { animation: av-armidle 3.4s var(--ease-in-out) infinite; }
+.av-idle .j-cape { animation: av-cape 3.4s var(--ease-in-out) infinite; }
+@keyframes av-breathe { 50% { transform: scaleY(1.03); } }
+@keyframes av-headbob { 50% { transform: translateY(-0.9px); } }
+@keyframes av-armidle { 0%, 100% { transform: rotate(calc(var(--d) * 3deg)); } 50% { transform: rotate(calc(var(--d) * 7deg)); } }
+@keyframes av-cape { 50% { transform: skewX(-3deg); } }
+
+/* run in place / walk: knees lift in turn, arms bent and pumping, body bobs */
+.av-run .j-root { animation: av-bob .62s linear infinite; }
+.av-run .j-leg { animation: av-lift .62s var(--ease-in-out) infinite; }
+.av-run .j-leg.r { animation-delay: -.31s; }
+.av-run .j-arm { animation: av-pump .62s var(--ease-in-out) infinite; }
+.av-run .j-arm.l { animation-delay: -.31s; }
+.av-run .j-fore, .av-walk .j-fore { transform: rotate(calc(var(--d) * -75deg)); }
+.av-run .j-cape { animation: av-cape .62s linear infinite; }
+.av-walk .j-root { animation: av-bob 1s var(--ease-in-out) infinite; }
+.av-walk .j-leg { animation: av-step 1s var(--ease-in-out) infinite; }
+.av-walk .j-leg.r { animation-delay: -.5s; }
+.av-walk .j-arm { animation: av-pump 1s var(--ease-in-out) infinite; }
+.av-walk .j-arm.l { animation-delay: -.5s; }
+@keyframes av-bob { 0%, 50%, 100% { transform: translateY(0); } 25%, 75% { transform: translateY(-2.5px); } }
+@keyframes av-lift { 0%, 55%, 100% { transform: translateY(0) scaleY(1); } 25% { transform: translateY(-11px) scaleY(.82); } }
+@keyframes av-step { 0%, 55%, 100% { transform: translateY(0); } 25% { transform: translateY(-5px); } }
+@keyframes av-pump { 0%, 100% { transform: rotate(calc(var(--d) * 12deg)) translateY(0); } 50% { transform: rotate(calc(var(--d) * 4deg)) translateY(-3px); } }
+
+/* jumping jack: jump out, land wide with arms up, jump in */
+.av-jump .j-root { animation: av-jackroot .9s var(--ease-in-out) infinite; }
+.av-jump .j-arm { animation: av-jackarm .9s var(--ease-in-out) infinite; }
+.av-jump .j-thigh { animation: av-jackleg .9s var(--ease-in-out) infinite; }
+.av-jump .j-shadow { animation: av-shadow .9s var(--ease-in-out) infinite; transform-origin: 60px 112px; }
+@keyframes av-jackroot { 0%, 50%, 100% { transform: translateY(0); } 25%, 75% { transform: translateY(-7px); } }
+@keyframes av-jackarm { 0%, 100% { transform: rotate(calc(var(--d) * 6deg)); } 45%, 55% { transform: rotate(calc(var(--d) * 165deg)); } }
+@keyframes av-jackleg { 0%, 100% { transform: rotate(0deg); } 45%, 55% { transform: rotate(calc(var(--d) * 17deg)); } }
+@keyframes av-shadow { 25%, 75% { transform: scaleX(.75); opacity: .2; } }
+
+/* squat: sit down and back up, arms out for balance */
+.av-squat .j-root { animation: av-sqroot 1.7s var(--ease-in-out) infinite; }
+.av-squat .j-thigh { animation: av-sqthigh 1.7s var(--ease-in-out) infinite; }
+.av-squat .j-shin { animation: av-sqshin 1.7s var(--ease-in-out) infinite; }
+.av-squat .j-arm { animation: av-sqarm 1.7s var(--ease-in-out) infinite; }
+@keyframes av-sqroot { 0%, 100% { transform: translateY(0); } 45%, 55% { transform: translateY(10px); } }
+@keyframes av-sqthigh { 0%, 100% { transform: rotate(0deg); } 45%, 55% { transform: rotate(calc(var(--d) * 55deg)); } }
+@keyframes av-sqshin { 0%, 100% { transform: rotate(0deg); } 45%, 55% { transform: rotate(calc(var(--d) * -80deg)); } }
+@keyframes av-sqarm { 0%, 100% { transform: rotate(calc(var(--d) * 5deg)); } 45%, 55% { transform: rotate(calc(var(--d) * 80deg)); } }
+
+/* press (push moves): hands from shoulders to straight up */
+.av-press .j-arm { animation: av-pressarm 1.4s var(--ease-in-out) infinite; }
+.av-press .j-fore { animation: av-pressfore 1.4s var(--ease-in-out) infinite; }
+@keyframes av-pressarm { 0%, 100% { transform: rotate(calc(var(--d) * 95deg)); } 45%, 55% { transform: rotate(calc(var(--d) * 168deg)); } }
+@keyframes av-pressfore { 0%, 100% { transform: rotate(calc(var(--d) * -100deg)); } 45%, 55% { transform: rotate(0deg); } }
+
+/* pull (rows, pull-ups): arms from straight up, pull down and lift the body */
+.av-pull .j-arm { animation: av-pullarm 1.5s var(--ease-in-out) infinite; }
+.av-pull .j-fore { animation: av-pullfore 1.5s var(--ease-in-out) infinite; }
+.av-pull .j-root { animation: av-pullroot 1.5s var(--ease-in-out) infinite; }
+@keyframes av-pullarm { 0%, 100% { transform: rotate(calc(var(--d) * 168deg)); } 45%, 55% { transform: rotate(calc(var(--d) * 100deg)); } }
+@keyframes av-pullfore { 0%, 100% { transform: rotate(0deg); } 45%, 55% { transform: rotate(calc(var(--d) * -105deg)); } }
+@keyframes av-pullroot { 0%, 100% { transform: translateY(0); } 45%, 55% { transform: translateY(-6px); } }
+
+/* celebrate: victory jump with arms in a V */
+.av-celebrate .j-root { animation: av-celroot 1.1s var(--ease-out) infinite; }
+.av-celebrate .j-arm { animation: av-celarm 1.1s var(--ease-out) infinite; }
+.av-celebrate .j-thigh { animation: av-celleg 1.1s var(--ease-out) infinite; }
+@keyframes av-celroot { 0%, 70%, 100% { transform: translateY(0); } 30% { transform: translateY(-11px); } }
+@keyframes av-celarm { 0%, 70%, 100% { transform: rotate(calc(var(--d) * 135deg)); } 30% { transform: rotate(calc(var(--d) * 160deg)); } }
+@keyframes av-celleg { 30% { transform: rotate(calc(var(--d) * 9deg)); } }
+
+.av .j-aura { animation: av-aura 3.4s var(--ease-in-out) infinite; transform-origin: 60px 66px; }
+@keyframes av-aura { 50% { transform: scale(1.06); opacity: .8; } }
