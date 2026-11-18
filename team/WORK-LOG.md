@@ -32,3 +32,9 @@
   update URL parsed and checked (host, path, no ".."); Summary uses the user's measures; "Use default" asks first.
   Open for Renz: Q19 (cardio pace), and old unlocks may re-lock under the new ladder (finding 6).
 - CI: apk job green on the first push (the new Java compiles). Release signing path untested until the secrets are added.
+
+## 2026-11-18 — Round 2 (Renz's answers)
+- exercise-scientist (high): 23 new moves, secret prerequisites, goal targets, demo map (41 of 78), sources re-opened where the network allowed.
+- Built: faster-time measure + stopwatch input with tenths; equipment-aware reveals/hints/chests; secret prerequisites;
+  goal rep/rest targets (Apply in Settings); interval reps on cardio stop; "How to do it" demo sheet.
+- Checks: typecheck clean; 74 unit tests; e2e 30/30; balance steady/casual/home (GAME-DESIGN.md).

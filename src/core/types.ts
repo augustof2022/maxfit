@@ -15,8 +15,12 @@ export interface EquipmentItem {
   deleted?: boolean;
 }
 
-/** One way to measure a set. An exercise can be tracked by one or more (Renz, 2026-11-18). */
-export type Measure = 'reps' | 'time' | 'distance' | 'weight';
+/**
+ * One way to measure a set. An exercise can be tracked by one or more (Renz, 2026-11-18).
+ * 'time' = longer wins (plank, a run's duration). 'speed' = "faster time": the same seconds, but lower
+ * wins (a 100 m sprint, a 1 km time trial). Renz, 2026-11-18: "a sprint is a set distance, how fast".
+ */
+export type Measure = 'reps' | 'time' | 'speed' | 'distance' | 'weight';
 
 /** Body areas the user can focus on. */
 export type Focus = 'chest' | 'back' | 'shoulders' | 'arms' | 'core' | 'legs' | 'cardio';
@@ -49,6 +53,12 @@ export interface Exercise {
   muscles: string[];
   /** Body areas it trains, for the goal profile. */
   focus: Focus[];
+  /** The move this one is a variation or regression of (shown as "Variation of ..."). */
+  base?: string;
+  /** Secrets: a chest can only give it once this exercise is unlocked. */
+  requires?: string;
+  /** free-exercise-db id (public domain) whose 2 photos are bundled in public/demos/. */
+  demo?: string;
   /** Goals it serves best, for the goal profile. */
   goals: Goal[];
   /** 0 = secret, 1 = starter ... 6 = legend */

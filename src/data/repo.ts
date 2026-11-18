@@ -11,6 +11,8 @@ import {
   computeRecords,
   dayKey,
   doneSessions,
+  fitsEquipment,
+  ownedEquipment,
   habitTarget,
   levelFromXp,
   openChest,
@@ -214,7 +216,7 @@ export async function logSet(sessionId: string, exerciseId: string, values: Pick
 }
 
 /** Ends a cardio block: saves the run as one set, returns to normal session mode. */
-export async function finishCardio(sessionId: string, distanceKm: number): Promise<LoggedSet | null> {
+export async function finishCardio(sessionId: string, distanceKm: number, reps?: number): Promise<LoggedSet | null> {
   const s = await db.sessions.get(sessionId);
   if (!s?.live?.cardio) return null;
   const now = Date.now();
@@ -225,6 +227,7 @@ export async function finishCardio(sessionId: string, distanceKm: number): Promi
   await db.sessions.update(sessionId, { live, updatedAt: now });
   return logSet(sessionId, exerciseId, {
     distanceKm,
+    reps,
     runSec: Math.round(c.run),
     walkSec: Math.round(c.walk),
     restSec: Math.round(c.rest),
@@ -410,6 +413,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
 
     // Mystery chest (surprises lean toward the goal profile)
     const equipment = await equipmentFor(s.locationId);
+    const owned = ownedEquipment(await db.locations.toArray());
     const chest = openChest(id, {
       unlocked: unlockedMid,
       cosmetics: profile.cosmetics,
@@ -418,6 +422,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
       available: availableExercises(unlockedMid, equipment),
       goals: profile.goals,
       focus: profile.focus,
+      owned,
     });
     let cosmetics = profile.cosmetics;
     if (chest.kind === 'xp') {
@@ -431,7 +436,8 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     finished.xpEarned = xp;
     const sessionsFinal = allSessions.map((x) => (x.id === id ? finished : x));
     const unlockedAfter = unlockedFrom(buildStats(sessionsFinal, sets, xpBefore + xp, now, measuresOf), sessionsFinal, profile.unlocked);
-    const newly = unlockedAfter.filter((x) => !unlockedBefore.includes(x));
+    // Reveal only what the user can do with their equipment; the rest waits until they have it.
+    const newly = unlockedAfter.filter((x) => !unlockedBefore.includes(x) && fitsEquipment(EXERCISE_BY_ID[x], owned));
 
     await db.sessions.put(finished);
     await db.profile.update('me', { cosmetics, challenge, updatedAt: now });

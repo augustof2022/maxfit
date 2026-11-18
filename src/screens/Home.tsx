@@ -13,8 +13,9 @@ export function Home({ game, go }: { game: Game; go: (t: Tab) => void }) {
   const color = COLORS.find((c) => c.id === p.color)?.hex ?? '#ff7a1a';
   const today = d.week[d.week.length - 1];
   const todayMin = Math.round((today.activeSec + today.restSec) / 60);
-  const hints = nextUnlockHints(d.unlocked, d.stats, 3);
-  const waiting = EXERCISES.length - d.unlocked.length;
+  const hints = nextUnlockHints(d.unlocked, d.stats, 3, d.canDo);
+  // Only count surprises the user could do with the equipment in their places.
+  const waiting = EXERCISES.filter((e) => d.canDo(e) && !d.unlocked.includes(e.id)).length;
   const needsGoals = !(p.goals ?? []).length && !(p.focus ?? []).length;
   const last2 = d.week.slice(-3, -1);
   const challengeEx = p.challenge ? EXERCISE_BY_ID[p.challenge.exerciseId] : null;

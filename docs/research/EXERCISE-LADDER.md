@@ -28,7 +28,7 @@ standard reference (for example the Compendium). **C** = coaching convention or 
 | E7 | Push-up difficulty, as % of body mass on the hands: hands on a 61 cm box ≈ 41%, knees ≈ 49%, floor ≈ 64%, feet on a 30 cm box ≈ 70%, feet on a 61 cm box ≈ 74%. So incline → floor → decline is a real, measured ladder | B | S9 Ebben 2011 |
 | E8 | Adults: 150–300 min a week moderate aerobic activity, or 75–150 min vigorous, plus muscle strengthening. Some activity is better than none | A | S3 WHO 2020 |
 | E9 | Energy cost (METs): vigorous calisthenics (push-ups, sit-ups, pull-ups, **jumping jacks, burpees**) 7.5; moderate calisthenics (lunges, push-ups) 3.8; light calisthenics (curl-ups, crunches, **plank**) 2.8; rope skipping 11.0; rowing machine (vigorous) 7.3. Light = 1.6–2.9, moderate = 3.0–5.9 METs | B | S4 Compendium 2024 |
-| E10 | **No Compendium entry was found for "running in place" or "high knees".** | — | [No source found] |
+| E10 | **Corrected in Round 2:** the Compendium lists 12025 "Jogging, in place" = 4.8 METs (opened 2026-11-18). No entry for "high knees". | B | S23 (Round 2) |
 | E11 | HIIT and steady cardio give the same fat loss in adults with overweight; HIIT took about 40% less time | A | S10 Wewege 2017 |
 | E12 | Whole-body (bodyweight) HIIT: same effect on fat mass as other aerobic training, slightly less on aerobic fitness, more on muscle fitness | A | S11 Scoubeau 2022 |
 | E13 | 150–250 min a week of moderate activity prevents weight gain but gives only modest loss; ≥250 min a week is linked to clinically significant loss; diet + exercise beats diet alone | A | S12 Donnelly 2009 (ACSM) |
@@ -237,3 +237,266 @@ each body focus favours rows with that tag. [Design choice]
   Mitigation: cue + note field suggestion.
 - **R5 — Records on weighted moves used as gates** (`measure: "reps"`) can be met with a very light
   weight. Accepted: the goal is pattern practice, and `level` gates still apply. [Design choice]
+
+---
+
+## Round 2 (2026-11-18)
+
+Author: `exercise-scientist` (effort high). Brief from `maxfit-pm` with Renz's answers of 2026-11-18.
+Status: **proposal**. The PM codes it; `game-designer` runs `npm run balance` (steady + casual).
+All session counts, record values and levels in unlock rules are **[Design choice]**.
+
+**Network this round.** Opened (read the page itself): WHO 2020 (PMC7719906), Kikuchi 2017
+(PMC5812864), Scoubeau 2022 (PMC9367756), Danielsson 2020 (PMC7526261), and the Compendium tables on
+pacompendium.com (running, walking, conditioning). Still blocked: pubmed.ncbi.nlm.nih.gov (cookie/JS
+check, every try), journals.lww.com (403 bot check), acsm.org (403), and pmc.ncbi.nlm.nih.gov after
+about 5 pages (reCAPTCHA). Those stay **search only**.
+
+**Correction to round 1 (ripple).** E10 said "no Compendium entry for running in place". Wrong: the
+Compendium running table lists **12025 "Jogging, in place" = 4.8 METs** (published value, not an
+estimate). High knees still has no entry. Fixed in E10 above and in `docs/RESEARCH.md`.
+
+**New sources this round** (S1–S22 are in section 7):
+
+| Code | Source | Link | Status | Grade |
+|---|---|---|---|---|
+| S23 | 2024 Adult Compendium, running + walking tables: 12025 jogging in place 4.8; 12029 running 4.3–4.8 mph 7.8; 12050 running 6–6.3 mph 9.3; 12255 running uphill 4.5 mph 5% 10.3; 12260 running uphill 6.0 mph 5% 13.3; 17355 treadmill walk 3.0–3.4 mph 0% 3.8; 17035 climbing hills, no load, 6–10% grade, moderate-to-brisk 7.0 | [running](https://pacompendium.com/running/), [walking](https://pacompendium.com/walking/) | Opened | B |
+| S24 | 2024 Adult Compendium, conditioning table: 02020 vigorous calisthenics 7.5; 02022 moderate 3.8; 02024 light (incl. plank) 2.8; 02068 rope skipping 11.0; 02210 HIIT moderate 7.0; **02214 HIIT, burpees, mountain climbers, squat jumps, Tabata, vigorous 11.0** | [conditioning](https://pacompendium.com/conditioning-exercise/) | Opened | B |
+| S25 | Gist NH et al. Sprint interval training effects on aerobic capacity: systematic review and meta-analysis. *Sports Med* 2014;44(2):269–279. 16 RCTs, 318 people (young, healthy): VO2max up ~3.6 mL/kg/min; about equal to continuous endurance training with less volume | [PubMed 24129784](https://pubmed.ncbi.nlm.nih.gov/24129784/) | Search only | A |
+| S26 | Nielsen RO et al. Excessive progression in weekly running distance and risk of running-related injuries. *JOSPT* 2014. 874 novice runners, 1 year: no overall difference; >30% weekly increase had a non-significant higher risk of distance-related injuries (HR 1.59, 95% CI 0.96–2.66) | [AAU record](https://vbn.aau.dk/da/publications/excessive-progression-in-weekly-running-distance-and-risk-of-runn) | Search only | B |
+| S27 | Jones AM, Doust JH. A 1% treadmill grade most accurately reflects the energetic cost of outdoor running. *J Sports Sci* 1996;14:321–327 (9 trained men) | [record](https://www.sponet.de/sponet/Record/4001902) | Search only | B |
+| S28 | Cooper KH. A means of assessing maximal oxygen intake: correlation between field and treadmill testing. *JAMA* 1968;203(3):201–204. 12-min run distance vs treadmill VO2max, r = 0.897 (115 men) | [record](https://lida.sport-iat.de/ta/Record/4077559?lng=en) | Search only | B |
+| S29 | Danielsson A et al. The mechanism of hamstring injuries — a systematic review. *BMC Musculoskelet Disord* 2020. "Hamstring injuries during sprinting are most likely to occur due to excessive muscle strain caused by eccentric contraction" in the late swing phase | [PMC7526261](https://pmc.ncbi.nlm.nih.gov/articles/PMC7526261/) | Opened | B (systematic review of mechanism studies, not of prevention) |
+| S30 | Grgic J et al. Effects of rest interval duration in resistance training on measures of muscular strength: a systematic review. *Sports Med* 2018;48:137–151. Untrained: ~60–120 s seems enough; trained: >2 min to maximise strength | [record](https://lida.sport-iat.de/ta/Record/4047011) | Search only | A (systematic review of training studies) |
+| S31 | Cogley RM et al. Comparison of muscle activation using various hand positions during the push-up. *J Strength Cond Res* 2005;19(3):628–633. 40 people: narrow base gave more chest and triceps EMG than wide base | [record](https://bvbvf1.bib-bvb.de/vufind/PrimoRecord/cdi_proquest_miscellaneous_68474100) | Search only | B |
+| S32 | Youdas JW et al. Surface EMG during pull-up, chin-up and a rotational pull-up. *J Strength Cond Res* 2010;24(12):3404–3414. Chin-up: more pectoralis and biceps; pull-up: more lower trapezius | [PubMed 21068680](https://pubmed.ncbi.nlm.nih.gov/21068680/) | Search only | B |
+| S33 | Contreras B et al. Gluteus maximus, biceps femoris and vastus lateralis EMG in the back squat and barbell hip thrust. *J Appl Biomech* 2015;31(6):452–458 (more glute EMG in the hip thrust); a later training trial (Plotkin et al., *Front Physiol* 2023) found similar glute growth from hip thrust and squat | [PubMed 26214739](https://pubmed.ncbi.nlm.nih.gov/26214739/), [DOAJ](https://doaj.org/article/e0f865b8c13d4086895c8762e72a6988) | Search only | B |
+| S34 | NSCA *Essentials of Strength Training and Conditioning* %1RM–reps table: 80% 1RM ≈ 8 reps, 85% ≈ 6 reps (point estimates; a later meta-analysis reports slightly higher rep counts) | [ACE reproduction](https://www.acefitness.org/fitness-certifications/ace-answers/exam-preparation-blog/2894/understanding-1-rm-and-predicted-1-rm-assessments/) | Search only | B |
+
+Re-checked round-1 sources (opened this round): **S3** WHO 2020 — "150–300 min of moderate-intensity,
+or 75–150 min of vigorous-intensity … per week" and muscle strengthening "on 2 or more days a week"
+(both confirmed). **S7** Kikuchi 2017 — 18 men, push-ups with the position adjusted (for example
+kneeling) to match 40% 1RM bench press, 3 sets to failure, 2-min rest, twice a week, 8 weeks:
+"comparably effective for muscle hypertrophy and strength gain". **S11** Scoubeau 2022 — whole-body
+HIIT vs other aerobic training: lower effect on aerobic fitness, similar on fat mass, larger on
+musculoskeletal fitness (confirmed). **S4** Compendium codes 02020/02022/02024/02068/02070 (confirmed).
+
+### Design choices this round (and why)
+
+1. **Running: one id per fixed distance.** Renz: "a sprint is a specific distance, how fast can we run
+   it". A record is only fair at the same distance, so the distance is part of the id (`sprint_100m`,
+   `run_1k_time_trial`, `run_5k_time_trial`). Then the only measure is **time, lower wins**. Options
+   considered: (a) one `sprint` id with a distance field (records mix distances, needs engine work);
+   (b) **fixed-distance ids (picked: no engine change, records always comparable)**; (c) only pace on
+   `run` (does not give Renz the "sprint" he asked for).
+2. **Fixed time, farther wins:** `cooper_12min` is the mirror test (time fixed at 12 min, distance
+   up = better), backed by a validated field test (S28).
+3. **No dead ends for running gates:** every running gate accepts a record on `run` **or**
+   `treadmill_run` (`any`), so a gym-only user is not stuck. Sprints and time trials need no equipment.
+4. **Variations follow Renz's order** (regular → wide → narrow): close-grip needs a wide push-up record.
+5. **Regressions are open early** (knee push-up = start; half burpee before burpee) so there is always a
+   safe version (round-1 principle 3).
+6. **Pacing:** 18 new tier-3 rows. Renz said variations are "not mandatory — just added to my exercise
+   inventory". [My suggestion] count them as unlocks but let the balance sim check "max unlocks in one
+   day" (target: no day with 3+). If needed, `game-designer` can raise record values.
+
+### A. New exercises (23: 17 variations of base moves + 6 running variations)
+
+Record values in rules use the main (first) measure; `run`/`treadmill_run` records are km.
+"time better": **faster** = lower time wins; **longer** = more time wins; **-** = no time measure, or time is fixed.
+
+| id | name | measures | time better (faster/longer/-) | equipment ids | muscles | focus tags | goal tags | tier | base id | unlock rule (JSON) | one-line safe cue | source refs |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| knee_push_up | Knee push-up | reps | - | (none) | chest, triceps, shoulders | chest, arms | muscle, lean | 1 | push_up (regression) | `{"type":"start"}` | Knees on a mat, body straight from knees to head. Chest to the floor, push up. | S9 (≈49% body mass, between incline and floor), S7 (opened) |
+| wide_push_up | Wide push-up | reps | - | (none) | chest, shoulders, triceps | chest, shoulders | muscle, lean | 3 | push_up | `{"type":"all","rules":[{"type":"record","exerciseId":"push_up","value":10},{"type":"sessions","count":6}]}` | Hands a little wider than shoulders, body straight, chest down, push up. Stop if a shoulder hurts. | S31, C |
+| close_grip_push_up | Close-grip push-up | reps | - | (none) | triceps, chest, shoulders | arms, chest | muscle, strength | 3 | push_up | `{"type":"all","rules":[{"type":"record","exerciseId":"push_up","value":12},{"type":"record","exerciseId":"wide_push_up","value":10}]}` | Hands under your shoulders, elbows close to your sides. Body straight, chest down, push up. | S31 (narrow > wide activation), C |
+| sumo_squat | Sumo squat | reps | - | (none) | quads, glutes, adductors | legs | muscle, lean | 3 | squat | `{"type":"all","rules":[{"type":"record","exerciseId":"squat","value":12},{"type":"sessions","count":6}]}` | Feet wide, toes turned out. Knees follow your toes, sit down, chest up. | C |
+| pause_squat | Pause squat | reps | - | (none) | quads, glutes | legs | muscle, strength | 3 | squat | `{"type":"all","rules":[{"type":"record","exerciseId":"squat","value":20},{"type":"sessions","count":10}]}` | Squat down, hold still for 3 seconds at the bottom, stand up. Count only paused reps. | C |
+| reverse_lunge | Reverse lunge | reps | - | (none) | quads, glutes | legs | muscle, lean | 3 | split_squat | `{"type":"all","rules":[{"type":"record","exerciseId":"split_squat","value":8},{"type":"sessions","count":8}]}` | Step back, lower the back knee toward the floor, push through the front heel to stand. Count both legs. | S22, C |
+| lateral_lunge | Side lunge | reps | - | (none) | quads, glutes, adductors | legs | muscle, lean, stamina | 3 | lunge | `{"type":"all","rules":[{"type":"record","exerciseId":"lunge","value":12}]}` | Big step to the side, sit back into that hip, other leg straight. Push back to stand. Count both legs. | C |
+| high_plank | High plank | time | longer | (none) | core, shoulders, chest | core, shoulders | stamina, strength | 3 | plank | `{"type":"all","rules":[{"type":"record","exerciseId":"plank","value":20}]}` | Hands under shoulders, arms straight, body in one line. Squeeze glutes, breathe. | S24 (02024), C |
+| plank_shoulder_tap | Plank shoulder tap | reps | - | (none) | core, shoulders | core, shoulders | stamina, strength | 3 | plank | `{"type":"all","rules":[{"type":"record","exerciseId":"plank","value":40},{"type":"record","exerciseId":"push_up","value":10}]}` | High plank, feet wide. Tap one shoulder, then the other; keep hips still. Count both sides. | C |
+| marching_glute_bridge | Marching glute bridge | reps | - | (none) | glutes, hamstrings, core | legs, core | muscle, lean | 3 | glute_bridge | `{"type":"all","rules":[{"type":"record","exerciseId":"glute_bridge","value":15}]}` | Bridge up and stay up. Lift one foot a little, then the other; hips stay level. Count both legs. | C |
+| hip_thrust | Hip thrust (bodyweight) | reps, weight | - | (none) | glutes, hamstrings | legs | muscle, strength, lean | 3 | glute_bridge | `{"type":"all","rules":[{"type":"record","exerciseId":"glute_bridge","value":20},{"type":"sessions","count":12}]}` | Upper back on a sturdy bench or a sofa against a wall. Push through your heels to a straight line, lower slowly. | S33 |
+| band_pull_apart | Band pull-apart | reps | - | resistance_band | upper back, rear shoulders | back, shoulders | muscle, lean | 3 | band_row | `{"type":"all","rules":[{"type":"record","exerciseId":"band_row","value":12}]}` | Arms straight at chest height. Pull the band apart to your chest, squeeze shoulder blades, return slowly. | C |
+| scapular_pull_up | Scapular pull-up | reps | - | pullup_bar | back, shoulders | back | strength | 3 | dead_hang | `{"type":"all","rules":[{"type":"record","exerciseId":"dead_hang","value":15}]}` | Hang with straight arms. Pull your shoulders down to rise a little, lower slowly. Arms stay straight. | C |
+| chin_up | Chin-up | reps | - | pullup_bar | back, biceps | back, arms | strength, muscle | 4 | negative_pull_up | `{"type":"all","rules":[{"type":"record","exerciseId":"negative_pull_up","value":4}]}` | Palms facing you, hands shoulder-width. Pull chin over the bar, lower slowly. | S32, C |
+| bird_dog | Bird dog | reps | - | (none) | core, lower back, glutes | core, back | stamina | 2 | dead_bug | `{"type":"all","rules":[{"type":"record","exerciseId":"dead_bug","value":10}]}` | On hands and knees, back flat. Reach one arm and the opposite leg out long, hold 2 seconds, switch. Count both sides. | S17 |
+| hollow_hold | Hollow hold | time | longer | (none) | core | core | strength, stamina | 3 | dead_bug | `{"type":"all","rules":[{"type":"record","exerciseId":"dead_bug","value":20},{"type":"record","exerciseId":"plank","value":30}]}` | On your back, low back pressed down. Lift shoulders and legs a little and hold. Bend knees to make it easier. | C |
+| half_burpee | Squat thrust (half burpee) | reps, time | longer | (none) | full body, heart | cardio, legs, core | lose_weight, stamina, lean | 3 | burpee (regression; gated by its parts) | `{"type":"all","rules":[{"type":"record","exerciseId":"squat","value":12},{"type":"record","exerciseId":"plank","value":20}]}` | Squat, hands down, step or jump feet back to a plank, back in, stand up. No push-up, no jump. | S24 (02214), S11 |
+| sprint_100m | Sprint 100 m | time | faster | (none) | legs, glutes, hamstrings, heart | cardio, legs | stamina, strength | 4 | run | `{"type":"all","rules":[{"type":"any","rules":[{"type":"record","exerciseId":"run","value":3,"measure":"distance"},{"type":"record","exerciseId":"treadmill_run","value":3,"measure":"distance"}]},{"type":"sessions","count":15}]}` | Warm up 10 minutes. Use a track or a marked flat 100 m. Build up speed over a few runs. Stop if the back of your thigh pulls. | S29 (opened), S25, C |
+| run_1k_time_trial | 1 km time trial | time | faster | (none) | legs, heart | cardio, legs | stamina, lose_weight | 3 | run | `{"type":"all","rules":[{"type":"any","rules":[{"type":"record","exerciseId":"run","value":1.5,"measure":"distance"},{"type":"record","exerciseId":"treadmill_run","value":1.5,"measure":"distance"}]},{"type":"sessions","count":6}]}` | Warm up first. Run 1 km at the fastest pace you can hold to the end. Log the time. | C (time trial as a test), S3 |
+| run_5k_time_trial | 5 km time trial | time | faster | (none) | legs, heart | cardio, legs | stamina, lose_weight | 4 | run | `{"type":"all","rules":[{"type":"any","rules":[{"type":"record","exerciseId":"run","value":5,"measure":"distance"},{"type":"record","exerciseId":"treadmill_run","value":5,"measure":"distance"}]},{"type":"sessions","count":20}]}` | Warm up first. Run 5 km at a pace you can hold; walk if you must. Log the total time. | S26, C |
+| interval_run | Interval run | reps, distance | - | (none) | legs, heart | cardio, legs | stamina, lose_weight, lean | 3 | run | `{"type":"all","rules":[{"type":"any","rules":[{"type":"record","exerciseId":"run","value":1,"measure":"distance"},{"type":"record","exerciseId":"treadmill_run","value":1,"measure":"distance"}]},{"type":"sessions","count":8}]}` | Warm up 5 minutes. Run hard (not all-out) 30 s, walk 90 s = 1 rep. Count the hard runs. | S25 (A), S10 (A), S24 (02210); 30 s / 90 s is [Design choice] |
+| cooper_12min | 12-minute run (Cooper test) | distance | - (time fixed at 12 min) | (none) | legs, heart | cardio, legs | stamina | 3 | run | `{"type":"all","rules":[{"type":"any","rules":[{"type":"record","exerciseId":"run","value":2,"measure":"distance"},{"type":"record","exerciseId":"treadmill_run","value":2,"measure":"distance"}]}]}` | Warm up first. Cover as much ground as you can in 12 minutes; walk if you must. Log the km. | S28 |
+| incline_treadmill_walk | Incline treadmill walk | time, distance | longer | treadmill | legs, glutes, heart | cardio, legs | lose_weight, stamina | 3 | treadmill_run | `{"type":"all","rules":[{"type":"record","exerciseId":"treadmill_run","value":1,"measure":"distance"}]}` | Start with a small incline. Walk tall; hold the rail lightly only for balance. Same incline to compare records. | S23 (17355 = 3.8 flat vs 17035 = 7.0 at 6–10% grade) |
+
+Notes for the PM:
+- **Existing cardio (`run`, `treadmill_run`, `bike`).** Renz sets distance and duration. Same rule as
+  round-1 Q-A: distance farther = better; at the same distance, **lower time (faster pace) = better**.
+  Still waiting for his yes on the pace rule.
+- **Treadmill cue (`treadmill_run`).** [My suggestion] add "Set 1% incline to match outdoor running"
+  (S27, B, 9 trained men only; later studies are mixed).
+- **Running load.** [My suggestion] no "add more km" nudge above +30% a week for a novice (S26, B,
+  not significant); the +0.1 km step in `nextTarget()` is far below this.
+- **Equipment.** `hip_thrust` and decline/Bulgarian moves need a sturdy bench, chair or sofa that most
+  homes have; left as bodyweight like round 1. `band_pull_apart` needs a band; `scapular_pull_up` and
+  `chin_up` need a pull-up bar; `incline_treadmill_walk` needs a treadmill — the PM's equipment
+  filter hides them where they cannot be done.
+- **Incline records** (incline walk, incline push-up) are only fair at the same incline/height.
+- **Code vs doc:** `run_in_place → high_knees` is 90 s in code, 120 s in the round-1 table. Both are
+  [Design choice]; the code value stands.
+
+### B. Secret prerequisites (a chest can only drop a secret after its base is unlocked)
+
+| secret id | requires base id | why |
+|---|---|---|
+| bear_crawl | plank | Same trunk bracing on hands and feet; plank shows the trunk can hold the line first. [C] |
+| wall_sit | squat | A wall sit is a held squat; learn the squat pattern and depth first. [C] |
+| superman_hold | bird_dog | Same back-extensor and glute work; bird dog is the lower-load, spine-neutral version (S17, C). |
+| shadow_boxing | run_in_place | Both are light, low-impact home cardio; `run_in_place` is a starter, so this barely delays it. [C] |
+| skater_jump | jumping_jack | Renz approved "skater jump after jumping jacks" (round-1 Q-C). Jumps come after landing practice (S18, C). Stricter option: `lateral_lunge` (one-leg side loading). |
+
+No new secrets added this round.
+
+### C. Goal targets (resistance moves)
+
+Machine-readable. Rep range = target reps per set on a resistance move (bodyweight or weighted).
+Holds and cardio keep their own "beat this" rule. Rest = default rest alarm for that goal; the user
+can still change it.
+
+| goal | rep low | rep high | sets | rest s | grade | source |
+|---|---|---|---|---|---|---|
+| strength | 5 | 8 | 3 | 120 | A (load, sets, rest range); B (rep conversion); low end [Design choice] | S2: ≥80% 1RM, 2–3 sets, early in session (A, search only). S34: 80% 1RM ≈ 8 reps (B, search only). Rest: ACSM 2009 2–3 min (S1, A) and untrained 60–120 s enough (S30, A) → 120 s fits both. Low end 5 (not 1–3) = beginner safety [Design choice] |
+| muscle | 8 | 12 | 3 | 90 | A | Reps: novices 8–12 RM (S1, A, search only); a wide range works near failure (S5, A). Sets: Kikuchi used 3 sets (S7, B, opened); ~10 sets/muscle/week (S6, S2, A). Rest: >60 s gives a small extra gain, no clear gain past 90 s (S14, A, search only) |
+| lean | 8 | 12 | 3 | 90 | A (via muscle); mapping [Design choice] | "Lean" = lose fat, keep muscle. Resistance training + calorie restriction kept lean mass best (S13, A). So use the muscle numbers; the cardio part comes from WHO minutes (S3, A, opened) |
+| stamina | 15 | 25 | 2 | 60 | A (>15 reps, <90 s); high end, sets, 60 s [Design choice] | Muscular endurance: light–moderate loads, >15 reps, <90 s rest (S1, A, search only). 25 = the point where the ladder moves to a harder variation (round-1 principle 2). Sets: no number found → 2 |
+| lose_weight | 10 | 15 | 2 | 60 | A that resistance training helps; numbers [Design choice] | Resistance training lowers body fat (~−1.6%) and adds lean mass in adults with overweight (S13, A). No source gives a "fat-loss rep range"; 10–15 sits between the muscle and endurance ranges of S1; 60 s keeps sessions short (habit goal) |
+
+**Combine rule (several goals picked).** Set targets **per exercise, not per session**: use the
+picked goal that the exercise also serves (its `goals` tags); if more than one fits, take the first
+in this order: **strength → muscle → lean → stamina → lose_weight**; if none fits, use the first
+picked goal in that order. Why: muscle grows across a wide rep range when sets are hard (S5, A), but
+maximal strength needs heavy loads (S2, A) and endurance needs >15 reps (S1, A), so a split by
+exercise covers every goal over the week, while averaging ranges (for example 5–25) would serve none.
+Heavier goals go first because they are the only way to get their adaptation, and ACSM puts strength
+work early in a session (S2). Cardio minutes are not split: the WHO weekly range (S3, opened) applies to
+all goals, and `lose_weight`/`stamina` point toward its upper end (S12, A). The base never changes:
+every plan keeps push, pull, legs, core and some cardio (S3: muscle strengthening ≥2 days a week).
+[Design choice built on A sources]
+
+### D. Demo map (free-exercise-db, The Unlicense)
+
+Downloaded `dist/exercises.json` (876 exercises) on 2026-11-18. A match is given only when the
+movement is the same (start and end photos would teach the right move). Both `0.jpg` and `1.jpg` were
+checked with a HEAD request; every matched id returned **200 for both**. "-" = no match, nothing to check.
+
+| maxfit id | free-exercise-db id or none | image check (200/404) |
+|---|---|---|
+| incline_push_up | Incline_Push-Up | 200 |
+| push_up | Pushups | 200 |
+| run | none (only trail running / treadmill entries) | - |
+| run_in_place | none | - |
+| squat | Bodyweight_Squat | 200 |
+| knee_raise | none | - |
+| jumping_jack | none (Star_Jump is a different move) | - |
+| dead_bug | Dead_Bug | 200 |
+| sit_up | Sit-Up | 200 |
+| plank | Plank | 200 |
+| glute_bridge | Butt_Lift_Bridge | 200 |
+| split_squat | none (Split_Squats in the DB is a jumping split) | - |
+| lunge | Bodyweight_Walking_Lunge (walking version of the same lunge) | 200 |
+| leg_raise | none (DB version is on a bench) | - |
+| mountain_climber | Mountain_Climbers | 200 |
+| high_knees | none | - |
+| burpee | none | - |
+| jump_rope | Rope_Jumping | 200 |
+| side_plank | Side_Bridge | 200 |
+| pike_push_up | none | - |
+| single_leg_glute_bridge | Single_Leg_Glute_Bridge | 200 |
+| band_row | none | - |
+| dead_hang | none | - |
+| db_row | One-Arm_Dumbbell_Row | 200 |
+| db_curl | Dumbbell_Bicep_Curl | 200 |
+| db_press | Dumbbell_Shoulder_Press | 200 |
+| db_rdl | none (Stiff-Legged_Dumbbell_Deadlift is close but not an RDL) | - |
+| inverted_row | Inverted_Row | 200 |
+| treadmill_run | Running_Treadmill | 200 |
+| bike | Bicycling_Stationary | 200 |
+| lat_pulldown | Wide-Grip_Lat_Pulldown | 200 |
+| decline_push_up | Decline_Push-Up | 200 |
+| diamond_push_up | none (DB close-grip is not hands-together) | - |
+| dips | Parallel_Bar_Dip | 200 |
+| jump_squat | Freehand_Jump_Squat | 200 |
+| goblet_squat | Goblet_Squat (photo shows a kettlebell; same move) | 200 |
+| bulgarian_split_squat | Split_Squat_with_Dumbbells (rear foot raised; photo shows dumbbells) | 200 |
+| negative_pull_up | none | - |
+| pull_up | Pullups | 200 |
+| bench_press | Barbell_Bench_Press_-_Medium_Grip | 200 |
+| barbell_squat | Barbell_Squat | 200 |
+| leg_press | Leg_Press | 200 |
+| deadlift | Barbell_Deadlift | 200 |
+| overhead_press | Standing_Military_Press | 200 |
+| pistol_squat | none (DB versions use a kettlebell or Smith machine) | - |
+| hanging_leg_raise | Hanging_Leg_Raise | 200 |
+| archer_push_up | none | - |
+| ab_rollout | Ab_Roller | 200 |
+| muscle_up | none (DB version is on rings) | - |
+| handstand_push_up | Handstand_Push-Ups | 200 |
+| bear_crawl | none | - |
+| wall_sit | none | - |
+| superman_hold | Superman | 200 |
+| shadow_boxing | none | - |
+| skater_jump | Lateral_Bound | 200 |
+| knee_push_up | none | - |
+| wide_push_up | Push-Up_Wide | 200 |
+| close_grip_push_up | Push-Ups_-_Close_Triceps_Position | 200 |
+| sumo_squat | none (DB version uses a dumbbell) | - |
+| pause_squat | none | - |
+| reverse_lunge | none (DB versions use dumbbells or add a twist) | - |
+| lateral_lunge | none | - |
+| high_plank | none | - |
+| plank_shoulder_tap | none | - |
+| marching_glute_bridge | none | - |
+| hip_thrust | none (DB version uses a barbell) | - |
+| band_pull_apart | Band_Pull_Apart | 200 |
+| scapular_pull_up | Scapular_Pull-Up | 200 |
+| chin_up | Chin-Up | 200 |
+| bird_dog | none | - |
+| hollow_hold | none | - |
+| half_burpee | none | - |
+| sprint_100m | none | - |
+| run_1k_time_trial | none | - |
+| run_5k_time_trial | none | - |
+| interval_run | none | - |
+| cooper_12min | none | - |
+| incline_treadmill_walk | Walking_Treadmill | 200 |
+
+**Count:** 78 MaxFit ids (55 existing + 23 new); **41 have a demo match** (all images 200); 37 = none
+(they rely on the avatar animation). Image URL pattern:
+`https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/<id>/0.jpg` and `/1.jpg`.
+[My suggestion] bundle the 82 photos in the app (Android offline) rather than hot-linking GitHub.
+
+### Open questions (round 2)
+
+1. **Q-E (variation unlocks).** Should a variation unlock count like a new exercise (avatar evolves,
+   XP), or be a smaller "inventory" unlock? Renz said variations are "not mandatory — just added to my
+   exercise inventory". — Decides pacing and how often the avatar evolves.
+2. **Q-F (sprint distance).** Is 100 m the sprint Renz wants, or another fixed distance (for example
+   60 m or 200 m)? — The distance is part of the id and cannot change later without losing records.
+3. **Q-A (still open).** Pace rule for `run` / `treadmill_run` / `bike` (faster at the same distance =
+   a record).
+
+### Risks (premortem, round 2)
+
+- **R6 — Sprinting is the main hamstring-injury mechanism** (S29). Mitigation: tier 4, a 3 km run
+  record + 15 sessions first, warm-up and "build up speed" in the cue.
+- **R7 — Many tier-3 unlocks.** 18 new tier-3 rows could give 3+ unlocks in one day. Mitigation:
+  balance sim before merge; raise record values if needed.
+- **R8 — Fixed-distance records need a real distance.** Phone GPS is not precise over 100 m.
+  Mitigation: cue says "track or marked 100 m". [Not checked] how the app measures it.
+- **R9 — Wrong demo photo teaches a wrong move.** Mitigation: strict "same movement" rule; 37 ids get
+  no photo rather than a near match. Two matches show a different implement (goblet squat with a
+  kettlebell, Bulgarian split squat with dumbbells) — noted above.
+- **R10 — Many sources still search only** (PubMed and LWW blocked). Goal numbers lean on ACSM 2009 and
+  the 2026 stand, neither opened. Mitigation: grades shown; re-open when the network allows.

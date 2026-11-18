@@ -2,7 +2,7 @@
 // so every rule can be unit-tested. See docs/GAME-DESIGN.md for the "why".
 
 import { EXERCISE_BY_ID, EXERCISES, SECRET_IDS } from './exercises';
-import { beats, fmtValues, hasValue, mainMeasure, MEASURES, measuresFor, measureValue } from './measures';
+import { beats, fmtValues, hasValue, lowerWins, mainMeasure, MEASURES, measuresFor, measureValue } from './measures';
 import type { Challenge, EquipmentId, Exercise, Focus, Goal, Measure, Session, UnlockRule, WorkSet } from './types';
 
 // ---------- dates ----------
@@ -105,7 +105,9 @@ export function computeRecords(sets: WorkSet[], measuresOf: MeasuresOf = default
     r.last = s;
     for (const m of MEASURES) {
       const v = measureValue(s, m.id);
-      if (v > (r.bests[m.id] ?? 0)) r.bests[m.id] = v;
+      if (v <= 0) continue;
+      const cur = r.bests[m.id];
+      if (cur === undefined || (lowerWins(m.id) ? v < cur : v > cur)) r.bests[m.id] = v;
     }
     r.best = r.bests[mainMeasure(ex)] ?? 0;
     if (r.bestSet ? beats(ms, s, r.bestSet) : hasValue(ms, s)) r.bestSet = s;
@@ -142,6 +144,36 @@ export interface Target {
 }
 
 export const REP_RANGE = { low: 8, high: 12 };
+
+/**
+ * Targets per goal for resistance moves (exercise-scientist, round 2; grades and sources in
+ * docs/research/EXERCISE-LADDER.md section C). Muscle/strength reps, sets and rest: grade A.
+ * Stamina and lose_weight numbers, set counts and the 25-rep cap: [Design choice].
+ */
+export const GOAL_TARGETS: Record<Goal, { low: number; high: number; sets: number; restSec: number; label: string }> = {
+  strength: { low: 5, high: 8, sets: 3, restSec: 120, label: 'Get stronger' },
+  muscle: { low: 8, high: 12, sets: 3, restSec: 90, label: 'Build muscle' },
+  lean: { low: 8, high: 12, sets: 3, restSec: 90, label: 'Get lean' },
+  stamina: { low: 15, high: 25, sets: 2, restSec: 60, label: 'Stamina' },
+  lose_weight: { low: 10, high: 15, sets: 2, restSec: 60, label: 'Lose weight' },
+};
+export const GOAL_ORDER: Goal[] = ['strength', 'muscle', 'lean', 'stamina', 'lose_weight'];
+
+/**
+ * Which goal sets the numbers for this exercise: the first picked goal (in GOAL_ORDER) that the exercise
+ * also serves; else the first picked goal; else none (default 8-12 reps, 90 s). Research, round 2, section C.
+ */
+export function goalFor(ex: Exercise | null, goals: Goal[] = []): Goal | null {
+  const picked = GOAL_ORDER.filter((g) => goals.includes(g));
+  if (!picked.length) return null;
+  return (ex && picked.find((g) => ex.goals.includes(g))) ?? picked[0];
+}
+
+/** Suggested rest between sets for the whole profile (its first goal in GOAL_ORDER). */
+export function suggestedRestSec(goals: Goal[] = []): number | null {
+  const g = goalFor(null, goals);
+  return g ? GOAL_TARGETS[g].restSec : null;
+}
 export const WEIGHT_STEP_KG = 2.5;
 
 function asSet(t: Target): Partial<WorkSet> {
@@ -153,17 +185,20 @@ function asSet(t: Target): Partial<WorkSet> {
  * so it always counts as a beat. Weight + reps: add reps up to the top of the range, then add
  * weight and keep the reps (see docs/RESEARCH.md, progression).
  */
-export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[] = ex.measures): Target {
+export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[] = ex.measures, goals: Goal[] = []): Target {
   const b = rec?.bestSet;
   const has = (m: Measure) => ms.includes(m);
+  const g = goalFor(ex, goals);
+  const RANGE = g ? { low: GOAL_TARGETS[g].low, high: GOAL_TARGETS[g].high } : REP_RANGE;
   if (!b) {
     const t: Target = { label: '' };
     if (has('weight')) t.weightKg = 0;
-    if (has('reps')) t.reps = has('weight') ? REP_RANGE.low : 5;
+    if (has('reps')) t.reps = has('weight') ? RANGE.low : 5;
     if (has('distance')) t.distanceKm = 1;
     if (has('time') && !has('distance')) t.seconds = 20;
     const bits: string[] = [];
-    if (has('weight')) bits.push(`pick a weight you can lift ${REP_RANGE.low}-${REP_RANGE.high} times`);
+    if (has('speed')) bits.push('go all out once and log your time; that is the time to beat');
+    if (has('weight')) bits.push(`pick a weight you can lift ${RANGE.low}-${RANGE.high} times`);
     else if (has('reps')) bits.push('try 5, or as many as you can with good form');
     if (has('distance')) bits.push('go 1 km, run or walk');
     else if (has('time')) bits.push('try 20 seconds');
@@ -175,15 +210,22 @@ export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[
   if (has('weight')) t.weightKg = b.weightKg ?? 0;
   if (has('distance')) t.distanceKm = b.distanceKm ?? 0;
   if (has('time')) t.seconds = measureValue(b, 'time');
+  if (has('speed')) t.seconds = measureValue(b, 'speed');
   let how: string;
   if (has('weight') && has('reps')) {
-    if ((b.reps ?? 0) >= REP_RANGE.high) {
+    if ((b.reps ?? 0) >= RANGE.high) {
       t.weightKg = round1((b.weightKg ?? 0) + WEIGHT_STEP_KG);
       how = `level up: add ${WEIGHT_STEP_KG} kg, keep ${t.reps} reps`;
     } else {
       t.reps = (b.reps ?? 0) + 1;
       how = 'one more rep';
     }
+  } else if (has('speed')) {
+    // Faster wins: a small cut. Short sprints in tenths; long time trials in whole seconds.
+    const cur = measureValue(b, 'speed');
+    const step = cur < 60 ? 0.2 : cur < 600 ? 2 : 10;
+    t.seconds = Math.max(0.1, Math.round((cur - step) * 10) / 10);
+    how = `${step} s faster${has('distance') ? ', same distance or more' : ''}`;
   } else if (has('distance')) {
     t.distanceKm = round1((b.distanceKm ?? 0) + 0.1);
     how = has('time') ? 'go 0.1 km farther, for at least the same time' : 'go 0.1 km farther';
@@ -420,16 +462,21 @@ export function newUnlocks(unlocked: string[], st: GameStats): string[] {
   return EXERCISES.filter((e) => !have.has(e.id) && e.unlock.type !== 'secret' && ruleMet(e.unlock, st)).map((e) => e.id);
 }
 
-/** Locked, non-secret exercises closest to unlocking first. */
-export function nextUnlockHints(unlocked: string[], st: GameStats, limit = 3) {
+/** Locked, non-secret exercises closest to unlocking first. `canDo` = only ones the user has equipment for. */
+export function nextUnlockHints(unlocked: string[], st: GameStats, limit = 3, canDo: (e: Exercise) => boolean = () => true) {
   const have = new Set(unlocked);
-  return EXERCISES.filter((e) => !have.has(e.id) && e.unlock.type !== 'secret')
+  return EXERCISES.filter((e) => !have.has(e.id) && e.unlock.type !== 'secret' && canDo(e))
     .map((e) => {
       const p = ruleProgress(e.unlock, st);
       return { exercise: e, ...p, ratio: Math.min(1, p.current / p.needed), text: describeRule(e.unlock, (id) => have.has(id)) };
     })
     .sort((a, b) => b.ratio - a.ratio || a.exercise.tier - b.exercise.tier)
     .slice(0, limit);
+}
+
+/** Every equipment id found in the user's places: what they own, somewhere. */
+export function ownedEquipment(places: { equipment: EquipmentId[]; deleted?: boolean }[]): EquipmentId[] {
+  return [...new Set(places.filter((p) => !p.deleted).flatMap((p) => p.equipment))];
 }
 
 /** Can this exercise be done with this equipment? */
@@ -582,10 +629,14 @@ function weightedPick<T>(items: T[], weight: (x: T) => number, rnd: () => number
 
 export function openChest(
   seed: string,
-  ctx: { unlocked: string[]; cosmetics: string[]; hadPR: boolean; records: Map<string, ExRecord>; available: Exercise[]; goals?: Goal[]; focus?: Focus[] },
+  ctx: { unlocked: string[]; cosmetics: string[]; hadPR: boolean; records: Map<string, ExRecord>; available: Exercise[]; goals?: Goal[]; focus?: Focus[]; owned?: EquipmentId[] },
 ): ChestReward {
   const rnd = seededRandom(seed);
-  const lockedSecrets = SECRET_IDS.filter((id) => !ctx.unlocked.includes(id));
+  // A secret only after its base move, and only if the user has the equipment for it (Renz, 2026-11-18).
+  const lockedSecrets = SECRET_IDS.filter((id) => {
+    const e = EXERCISE_BY_ID[id];
+    return !ctx.unlocked.includes(id) && (!e.requires || ctx.unlocked.includes(e.requires)) && (!ctx.owned || fitsEquipment(e, ctx.owned));
+  });
   const lockedColors = COLORS.filter((c) => c.id !== 'ember' && !ctx.cosmetics.includes(c.id));
   const challengeable = ctx.available.filter((e) => (ctx.records.get(e.id)?.best ?? 0) > 0 && mainMeasure(e) !== 'weight');
 

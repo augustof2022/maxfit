@@ -20,6 +20,9 @@ import {
   sessionXp,
   starterPlan,
   unlockedFrom,
+  COLORS,
+  goalFor,
+  suggestedRestSec,
   xpForLevel,
 } from './rules';
 import { beats, measuresFor } from './measures';
@@ -49,9 +52,9 @@ function set(exerciseId: string, v: Partial<WorkSet>, at = T0): WorkSet {
 }
 
 describe('catalog', () => {
-  it('day 1: four starters, all possible at home with no equipment (incline + push-up, run + run in place)', () => {
+  it('day 1: five starters, all possible at home with no equipment (knee/incline/push-up, run, run in place)', () => {
     const st = buildStats([], [], 0, T0);
-    expect(newUnlocks([], st).sort()).toEqual(['incline_push_up', 'push_up', 'run', 'run_in_place']);
+    expect(newUnlocks([], st).sort()).toEqual(['incline_push_up', 'knee_push_up', 'push_up', 'run', 'run_in_place']);
     expect(newUnlocks([], st).every((id) => EXERCISE_BY_ID[id].equipment.length === 0)).toBe(true);
   });
   it('every exercise has measures, focus and goals; ids are unique', () => {
@@ -175,6 +178,55 @@ describe('records and targets', () => {
   });
 });
 
+describe('faster time (sprints) and variations (round 2)', () => {
+  it('a sprint record is the LOWEST time; a slower time is not a record', () => {
+    const ex = EXERCISE_BY_ID.sprint_100m;
+    expect(ex.measures).toEqual(['speed']);
+    const sets = [set('sprint_100m', { seconds: 18.4 }, 1), set('sprint_100m', { seconds: 19.0 }, 2), set('sprint_100m', { seconds: 17.9 }, 3)];
+    const r = computeRecords(sets).get('sprint_100m')!;
+    expect(r.bestSet?.seconds).toBe(17.9);
+    expect(r.bests.speed).toBe(17.9);
+    expect([...prFlags(sets).values()]).toEqual([false, false, true]);
+    expect(nextTarget(ex, r).seconds).toBeLessThan(17.9);
+  });
+  it('a run measured by distance + faster time: same km in less time is a record', () => {
+    expect(beats(['distance', 'speed'], { distanceKm: 1, durationSec: 360 }, { distanceKm: 1, durationSec: 420 })).toBe(true);
+    expect(beats(['distance', 'speed'], { distanceKm: 1, durationSec: 480 }, { distanceKm: 1, durationSec: 420 })).toBe(false);
+    expect(beats(['distance', 'time'], { distanceKm: 1, durationSec: 480 }, { distanceKm: 1, durationSec: 420 })).toBe(true); // a normal run: longer counts
+  });
+  it('time and faster time are never tracked together', () => {
+    expect(measuresFor(EXERCISE_BY_ID.run, { run: ['distance', 'time', 'speed'] })).toEqual(['distance', 'speed']);
+  });
+  it('every variation names a real base move; every secret requires a real move', () => {
+    for (const e of EXERCISES) {
+      if (e.base) expect(EXERCISE_BY_ID[e.base], e.id).toBeDefined();
+      if (e.requires) expect(EXERCISE_BY_ID[e.requires], e.id).toBeDefined();
+      if (e.unlock.type === 'secret') expect(e.requires, e.id).toBeDefined();
+    }
+  });
+  it('a chest never gives a secret before its base move, or one the user lacks equipment for', () => {
+    const base = { cosmetics: COLORS.map((c) => c.id), hadPR: false, records: new Map(), available: [], owned: [] as string[] };
+    const picks = new Set(Array.from({ length: 300 }, (_, i) => openChest(`s${i}`, { ...base, unlocked: ['push_up', 'squat'] })).filter((r) => r.kind === 'secret').map((r) => (r as any).exerciseId));
+    expect([...picks]).toEqual(['wall_sit']); // only wall sit's base (squat) is unlocked
+  });
+});
+
+describe('goal targets (round 2)', () => {
+  it('weight moves use the rep range of the goal; strength levels up at 8 reps', () => {
+    const ex = EXERCISE_BY_ID.db_row;
+    const r = computeRecords([set('db_row', { weightKg: 10, reps: 8 })]).get('db_row')!;
+    expect(nextTarget(ex, r, ex.measures, ['strength'])).toMatchObject({ weightKg: 12.5, reps: 8 });
+    expect(nextTarget(ex, r, ex.measures, ['muscle'])).toMatchObject({ weightKg: 10, reps: 9 });
+  });
+  it('several goals: the first one (strength > muscle > lean > stamina > lose weight) the move serves', () => {
+    expect(goalFor(EXERCISE_BY_ID.db_curl, ['stamina', 'muscle'])).toBe('muscle');
+    expect(goalFor(EXERCISE_BY_ID.jumping_jack, ['strength', 'stamina'])).toBe('stamina');
+    expect(goalFor(EXERCISE_BY_ID.db_curl, [])).toBeNull();
+    expect(suggestedRestSec(['stamina', 'muscle'])).toBe(90);
+    expect(suggestedRestSec([])).toBeNull();
+  });
+});
+
 describe('unlocks come from the data', () => {
   it('deleting the record that earned an unlock locks it again', () => {
     const recordRule = EXERCISES.find((e) => e.unlock.type === 'record' && (e.unlock as any).exerciseId === 'push_up')!;
@@ -246,12 +298,12 @@ describe('mystery chest', () => {
   });
   it('gives every kind of reward across many seeds', () => {
     const records = computeRecords([set('push_up', { reps: 10 })]);
-    const ctx = { unlocked: ['push_up'], cosmetics: [], hadPR: true, records, available: [EXERCISE_BY_ID.push_up] };
+    const ctx = { unlocked: ['push_up', 'plank', 'squat', 'bird_dog', 'run_in_place', 'jumping_jack'], cosmetics: [], hadPR: true, records, available: [EXERCISE_BY_ID.push_up] };
     const kinds = new Set(Array.from({ length: 300 }, (_, i) => openChest(`seed${i}`, ctx).kind));
     expect([...kinds].sort()).toEqual(['challenge', 'color', 'secret', 'xp']);
   });
   it('secrets lean toward the goal profile', () => {
-    const ctx = { unlocked: ['push_up'], cosmetics: ['ember', 'ocean', 'jade', 'violet', 'gold', 'rose'], hadPR: false, records: new Map(), available: [], focus: ['legs' as const] };
+    const ctx = { unlocked: ['push_up', 'plank', 'squat', 'bird_dog', 'run_in_place', 'jumping_jack'], cosmetics: ['ember', 'ocean', 'jade', 'violet', 'gold', 'rose'], hadPR: false, records: new Map(), available: [], focus: ['legs' as const] };
     const picks = Array.from({ length: 400 }, (_, i) => openChest(`f${i}`, ctx)).filter((r) => r.kind === 'secret').map((r) => (r as any).exerciseId as string);
     const legHits = picks.filter((id) => profileScore(EXERCISE_BY_ID[id], [], ['legs']) > 0).length;
     const legShare = EXERCISES.filter((e) => e.unlock.type === 'secret' && profileScore(e, [], ['legs']) > 0).length / EXERCISES.filter((e) => e.unlock.type === 'secret').length;

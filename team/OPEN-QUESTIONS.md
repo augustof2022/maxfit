@@ -20,8 +20,10 @@
 | Q16 | 2026-11-18 | After you edit or delete data: recompute XP, records and streak (yes); also re-lock exercises earned only from deleted data? | Item 7; today unlocks never re-lock | **Answered 2026-11-18:** yes, deleted data locks again; corrections keep it; every change asks "are you sure?" |
 | Q17 | 2026-11-18 | Progress photos: phone only, or also private cloud backup? Show weight/BMI on the photo by default? | Item 8; body photos are sensitive data | **Answered 2026-11-18:** phone only |
 | Q18 | 2026-11-18 | Deadline and order of the 8 items | Planning | **Answered 2026-11-18:** deadline now |
-| Q19 | 2026-11-18 | Cardio records: may run / treadmill / bike compare distance and **pace** instead of raw time? With rule A and raw time, a faster run over the same distance is not a record | Fairness for cardio records | Open |
-| Q20 | 2026-11-18 | Home equipment: do you have a resistance band, pull-up bar, dumbbells, ab wheel? | Several new moves need them; Home is seeded with a mat only | Open (same as Q2) |
-| Q21 | 2026-11-18 | Secret moves only after their base move is unlocked (e.g. skater jump after jumping jacks)? | Safety of chest surprises; small engine change | Open |
-| Q22 | 2026-11-18 | Allow acsm.org, pacompendium.com and pmc.ncbi.nlm.nih.gov in the session network so sources can be opened, not just searched? | All new sources are "search only" | Open |
-| Q23 | 2026-11-18 | Goal-based rep and rest targets (e.g. shorter rest for stamina)? The research table has them with grades | Item 4 part 2 | Open |
+| Q19 | 2026-11-18 | Cardio records: may run / treadmill / bike compare distance and **pace** instead of raw time? With rule A and raw time, a faster run over the same distance is not a record | Fairness for cardio records | **Answered 2026-11-18:** by exercise: normal run = distance + time; sprints = fixed distance, faster time wins (built) |
+| Q20 | 2026-11-18 | Home equipment: do you have a resistance band, pull-up bar, dumbbells, ab wheel? | Several new moves need them; Home is seeded with a mat only | **Answered 2026-11-18:** depends on his places; never surprise-add a move he cannot do (built: equipment-aware) |
+| Q21 | 2026-11-18 | Secret moves only after their base move is unlocked (e.g. skater jump after jumping jacks)? | Safety of chest surprises; small engine change | **Answered 2026-11-18:** yes (built) |
+| Q22 | 2026-11-18 | Allow acsm.org, pacompendium.com and pmc.ncbi.nlm.nih.gov in the session network so sources can be opened, not just searched? | All new sources are "search only" | **Answered 2026-11-18:** yes (hosts added; acsm.org still 403) |
+| Q23 | 2026-11-18 | Goal-based rep and rest targets (e.g. shorter rest for stamina)? The research table has them with grades | Item 4 part 2 | **Answered 2026-11-18:** yes (built, Apply button for rest) |
+| Q24 | 2026-11-18 | Should a variation count as a full unlock (gear, "N unlocked") or a smaller "inventory" unlock? Built as full for now | Avatar gear pace | Open |
+| Q25 | 2026-11-18 | Is 100 m the sprint distance you want? The distance is part of the exercise id | Changing later splits records | Open |

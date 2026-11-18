@@ -29,7 +29,9 @@ Progress photos are **never** uploaded (Renz, 2026-11-18): they stay on the phon
    "Confirm email" on: after **Create account** in MaxFit, open the email link, then **Sign in**.
 7. The next app build has sync. In MaxFit: **Settings → Cloud sync → Create account**.
 
-For a computer: copy `.env.example` to `.env` and put the same two values in it.
+For the phone app **no file is needed**: the build reads the two GitHub variables. Only to run MaxFit on a
+computer: copy `.env.example` to a file named exactly **`.env`** (not `maxfit.env`) in the main folder next to
+`package.json`, and put the same two values in it. Git ignores `.env`, so it is never uploaded.
 
 ## The app signing key (one time) — needed for "tap Update"
 Android only installs an update over the app if both were signed with the **same key**. The

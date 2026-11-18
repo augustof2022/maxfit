@@ -3,6 +3,7 @@ import { Avatar } from '../components/Avatar';
 import { Bar, IconBtn, Sheet, Stepper } from '../components/ui';
 import { confirmAsk } from '../components/Confirm';
 import { EditSetSheet, MeasureSheet } from '../components/SetEditors';
+import { ExerciseDemo } from '../components/ExerciseDemo';
 import { EXERCISES, EXERCISE_BY_ID, TIER_NAMES } from '../core/exercises';
 import { equipmentName } from '../core/equipment';
 import { fmtClock } from '../core/live';
@@ -19,8 +20,10 @@ export function Progress({ game }: { game: Game }) {
   const color = COLORS.find((c) => c.id === p.color)?.hex ?? '#ff7a1a';
   const unlocked = new Set(d.unlocked);
   const history = doneSessions(game.sessions).reverse().slice(0, 30);
-  const waiting = EXERCISES.length - d.unlocked.length;
-  const next = nextUnlockHints(d.unlocked, d.stats, 1)[0];
+  const waiting = EXERCISES.filter((e) => d.canDo(e) && !d.unlocked.includes(e.id)).length;
+  const needGear = EXERCISES.filter((e) => !d.canDo(e)).length;
+  const next = nextUnlockHints(d.unlocked, d.stats, 1, d.canDo)[0];
+  const [demo, setDemo] = useState<Exercise | null>(null);
   const [measuring, setMeasuring] = useState<Exercise | null>(null);
   const [editSet, setEditSet] = useState<WorkSet | null>(null);
   const [editSession, setEditSession] = useState<Session | null>(null);
@@ -106,12 +109,18 @@ export function Progress({ game }: { game: Game }) {
                     <span className="ico">{iconFor(ms)}</span>
                     <div className="grow stack" style={{ gap: 4 }}>
                       <b>{e.name}</b>
+                      {e.base && EXERCISE_BY_ID[e.base] && <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>Variation of {EXERCISE_BY_ID[e.base].name} · optional</span>}
                       <span className="small muted">{rec?.bestSet ? `Record ${fmtRecord(ms, rec)} · ${rec.count} sets` : 'Unlocked. Try it next session!'}</span>
                       {e.equipment.length > 0 && <span className="tiny muted">Needs: {e.equipment.map((id) => equipmentName(id, game.customEquipment)).join(', ')}</span>}
                     </div>
-                    <IconBtn label={`How ${e.name} is measured`} onClick={() => setMeasuring(e)}>
-                      📏 {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join('+')}
-                    </IconBtn>
+                    <div className="stack" style={{ gap: 6 }}>
+                      <IconBtn label={`How to do ${e.name}`} onClick={() => setDemo(e)}>
+                        ▶ How to
+                      </IconBtn>
+                      <IconBtn label={`How ${e.name} is measured`} onClick={() => setMeasuring(e)}>
+                        📏 {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join('+')}
+                      </IconBtn>
+                    </div>
                   </div>
                 );
               })}
@@ -124,7 +133,7 @@ export function Progress({ game }: { game: Game }) {
               🎁
             </span>
             <b>{waiting} surprises waiting</b>
-            <span className="small muted">New moves stay hidden until you unlock them.</span>
+            <span className="small muted">New moves and variations stay hidden until you unlock them. They are optional: they go into your inventory.</span>
             {next && (
               <>
                 <Bar value={next.current} max={next.needed} />
@@ -133,6 +142,7 @@ export function Progress({ game }: { game: Game }) {
             )}
           </div>
         )}
+        {needGear > 0 && <p className="small muted">{needGear} more moves need equipment that none of your places has. Add equipment to a place (Settings → My places) and they can come up as surprises too.</p>}
       </section>
 
       <section className="card stack" aria-label="History">
@@ -173,6 +183,7 @@ export function Progress({ game }: { game: Game }) {
         })}
       </section>
 
+      {demo && <ExerciseDemo ex={demo} onClose={() => setDemo(null)} />}
       {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} onClose={() => setMeasuring(null)} />}
       {editSet && EXERCISE_BY_ID[editSet.exerciseId] && <EditSetSheet ex={EXERCISE_BY_ID[editSet.exerciseId]} ms={d.measuresOf(EXERCISE_BY_ID[editSet.exerciseId])} set={editSet} onClose={() => setEditSet(null)} />}
       {editSession && <EditSessionSheet game={game} s={editSession} onClose={() => setEditSession(null)} />}

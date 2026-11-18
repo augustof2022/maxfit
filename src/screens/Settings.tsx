@@ -7,7 +7,7 @@ import { deleteEquipment, exportAll, importAll, resetTrainingData, updateProfile
 import { confirmAsk } from '../components/Confirm';
 import { GoalPicker } from '../components/GoalPicker';
 import { Avatar, AVATAR_STYLES } from '../components/Avatar';
-import { COLORS } from '../core/rules';
+import { COLORS, GOAL_TARGETS, goalFor, suggestedRestSec } from '../core/rules';
 import { saveFile } from '../lib/native';
 import { appVersion } from '../lib/update';
 import type { Game } from '../data/useGame';
@@ -118,6 +118,26 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         <h2>Rest alarm</h2>
         <Stepper label="Alarm when rest is longer than" unit="sec" value={s.restLimitSec} step={15} min={15} onChange={(v) => updateSettings({ restLimitSec: Math.max(15, v) })} />
         <p className="small muted">For muscle growth, a common guide is 1–2 minutes between sets (ACSM). Start at 90 seconds.</p>
+        {(() => {
+          const sug = suggestedRestSec(p.goals ?? []);
+          const g = goalFor(null, p.goals ?? []);
+          if (!sug || !g || sug === s.restLimitSec) return null;
+          return (
+            <div className="row between banner small">
+              <span>
+                For your goal ({GOAL_TARGETS[g].label}): rest about <b>{sug} s</b>.
+              </span>
+              <button
+                className="btn ghost icon-btn"
+                onClick={async () => {
+                  if (await confirmAsk({ title: `Set the rest alarm to ${sug} s?`, body: `Now ${s.restLimitSec} s. You can change it back any time.`, ok: 'Apply' })) await updateSettings({ restLimitSec: sug });
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          );
+        })()}
         <Toggle label="Sound" on={s.sound} set={(v) => updateSettings({ sound: v })} />
         <Toggle label="Vibrate" on={s.vibrate} set={(v) => updateSettings({ vibrate: v })} />
         <button

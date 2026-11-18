@@ -164,3 +164,30 @@ and casual players could never unlock streak-only moves. All three were fixed.
 | home (6 days/week, no equipment) | level 15, 43 of 50 (High knees day 62) | — |
 High knees gate lowered 120 s → 90 s of run in place **[Design choice]**: at 120 s the home user never
 unlocked it in 90 days. Still locked after 90 days are tier 5–6 moves (deadlift, pistol, muscle-up…): intended.
+
+## Round 2 (2026-11-18, Renz's answers)
+- **Faster time** is a measure of its own (`speed`): same seconds, lower wins. Sprints and time trials use it;
+  any exercise can switch Time ⇄ Faster time in 📏. A run can be distance + time (longer wins) or distance + faster time.
+- **78 moves** (73 ladder + 5 secrets): 17 variations of base moves (knee/wide/close-grip push-up, sumo/pause squat,
+  reverse/side lunge, high plank, shoulder taps, marching bridge, hip thrust, band pull-apart, scapular pull-up,
+  chin-up, bird dog, hollow hold, half burpee) and 6 running variations (100 m sprint, 1 km and 5 km time trials,
+  intervals, 12-minute run, incline treadmill walk). Each variation names its base move. All optional: they go
+  into the inventory. Day 1 now has 5 starters (knee push-up added).
+- **Equipment-aware surprises.** Only moves doable with the equipment of at least one place are revealed,
+  hinted, counted or given by a chest. Others stay hidden until that equipment is added to a place.
+- **Secrets need their base move** (bear crawl ← plank, wall sit ← squat, superman ← bird dog,
+  shadow boxing ← run in place, skater jump ← jumping jack).
+- **Goal targets** (`GOAL_TARGETS`): strength 5–8 × 3, 120 s; muscle and lean 8–12 × 3, 90 s; stamina 15–25 × 2, 60 s;
+  lose weight 10–15 × 2, 60 s. Per exercise the first picked goal (strength > muscle > lean > stamina > lose weight)
+  that the move serves. The rest alarm is only suggested (Settings → Apply), never changed silently.
+- **Demos**: 41 moves have 2 public-domain photos (free-exercise-db, Unlicense) bundled in `public/demos/`;
+  every move has the avatar doing it and a YouTube search button.
+
+### Balance (round 2, 90 days)
+| Profile | Unlocked (of 73 ladder moves) | Most unlocks in one day |
+|---|---|---|
+| steady (gym) | 57 | 3 |
+| casual (gym) | 35 | 4 (day 80) |
+| home (no equipment) | 56 | 3 |
+High knees stays locked at 90 days in the simulation because the simulated user rarely trains run in place;
+a real user who runs in place often reaches 90 s in about 14 practice sessions [Design choice; watch it].

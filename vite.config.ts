@@ -16,6 +16,8 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icon.svg'],
+      // Exercise demo photos (1.8 MB) are cached too, so "How to do it" works offline at the gym.
+      workbox: { globPatterns: ['**/*.{js,css,html,svg}', 'demos/*.jpg'] },
       manifest: {
         name: 'MaxFit',
         short_name: 'MaxFit',

@@ -18,3 +18,6 @@
 | 2026-11-18 | New agent `exercise-scientist` (high) | Raise fitness-coach effort; borrow My Staffs researcher | Renz | Everything training-related science-backed |
 | 2026-11-18 | Fixed APK signing key in GitHub secrets; version = run number; publish from main only | Keep debug key | Renz | In-app "Update" needs the same key every build |
 | 2026-11-18 | Avatar: one jointed figure, 3 styles (athlete, neon line, buddy), CSS motion | Lottie/Rive files | maxfit-pm | No art files needed; same moves in every style; light |
+| 2026-11-18 | "Faster time" as its own measure (lower wins) | A per-exercise flag | maxfit-pm | Works with the measure picker and rule A with no extra settings |
+| 2026-11-18 | Surprises only for equipment in Renz's places | Reveal all | Renz | "Don't surprise-add an exercise I can't do" |
+| 2026-11-18 | Demos = public-domain photos + avatar + YouTube search | Avatar only; hand-picked video links | maxfit-pm | Clear, offline, no broken or made-up links |

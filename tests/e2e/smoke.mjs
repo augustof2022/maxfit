@@ -41,14 +41,14 @@ try {
   await page.getByRole('heading', { name: 'MaxFit' }).waitFor();
   await page.getByRole('heading', { name: 'Level 1', exact: true }).waitFor();
   check('Home loads with level 1 avatar', true);
-  check('Starter: 4 home-friendly exercises unlocked', await page.getByText(/^4 exercises unlocked/).isVisible());
+  check('Starter: 5 home-friendly exercises unlocked', await page.getByText(/^5 exercises unlocked/).isVisible());
   check('Goal prompt shows on first open', await page.getByRole('heading', { name: 'What is your goal?' }).isVisible());
   await shot('01-home');
 
   // Train: location picker -> Home has no dumbbells
   await page.getByRole('button', { name: 'Start session' }).click();
   await page.getByRole('heading', { name: 'Train' }).waitFor();
-  check('Train shows the 4 starters at Home', (await page.getByText('You can do here (4)').count()) === 1);
+  check('Train shows the 5 starters at Home', (await page.getByText('You can do here (5)').count()) === 1);
   await shot('02-train-pre');
 
   // Settings: rest limit 15 s so the alarm test is quick
@@ -184,6 +184,14 @@ try {
   check('Locked exercises are hidden (no Muscle-up on Progress)', (await page.getByText('Muscle-up').count()) === 0 && (await page.getByText(/surprises waiting/).count()) > 0);
   await shot('14-progress-surprises');
 
+  // How to do it: real start/finish photos + avatar + YouTube search.
+  await page.getByRole('button', { name: 'How to do Push-up' }).click();
+  await page.getByRole('img', { name: 'Push-up, finish position' }).waitFor();
+  const ok = await page.getByRole('img', { name: 'Push-up, start position' }).evaluate((img) => img.complete && img.naturalWidth > 0);
+  check('Exercise demo shows real photos and a YouTube link', ok && (await page.getByRole('link', { name: /Watch on YouTube/ }).count()) === 1);
+  await shot('14b-demo');
+  await page.getByRole('button', { name: 'Got it' }).click();
+
   // Measures: push-up measured by reps + time.
   await page.getByRole('button', { name: 'How Push-up is measured' }).click();
   await page.getByRole('button', { name: /^Time/ }).click();
@@ -245,7 +253,7 @@ try {
   await page.waitForTimeout(400);
   await page.locator('.tabbar').getByRole('button', { name: 'Home' }).click();
   await page.waitForTimeout(600);
-  check('Reset: back to level 1 and 4 starters', await page.getByRole('heading', { name: 'Level 1', exact: true }).isVisible() && (await page.getByText(/^4 exercises unlocked/).count()) === 1);
+  check('Reset: back to level 1 and 5 starters', await page.getByRole('heading', { name: 'Level 1', exact: true }).isVisible() && (await page.getByText(/^5 exercises unlocked/).count()) === 1);
 } catch (e) {
   check('Flow ran to the end', false, String(e).split('\n')[0]);
   await shot('99-failure');

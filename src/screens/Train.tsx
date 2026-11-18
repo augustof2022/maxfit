@@ -3,9 +3,10 @@ import { EXERCISE_BY_ID } from '../core/exercises';
 import { equipmentName, knownEquipment } from '../core/equipment';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { cardioTotals, fmtClock, inMode, totals, activeSeconds } from '../core/live';
-import { fmtPace, fmtTarget, nextTarget, starterPlan, suggestedPlan, type ExRecord } from '../core/rules';
+import { fmtPace, fmtTarget, GOAL_TARGETS, goalFor, nextTarget, starterPlan, suggestedPlan, type ExRecord } from '../core/rules';
+import { ExerciseDemo } from '../components/ExerciseDemo';
 import { fmtValues, iconFor, isCardioFlow, MEASURES } from '../core/measures';
-import type { Exercise, LiveMode, Measure, Session, WorkSet } from '../core/types';
+import type { Exercise, Goal, LiveMode, Measure, Session, WorkSet } from '../core/types';
 import { cancelCardio, discardSession, finishCardio, finishSession, logSet, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
 import { confirmAsk } from '../components/Confirm';
 import { EditSetSheet, MeasureInputs, MeasureSheet } from '../components/SetEditors';
@@ -255,6 +256,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
               key={e.id}
               ex={e}
               ms={d.measuresOf(e)}
+              goals={p.goals ?? []}
               rec={d.stats.records.get(e.id)}
               sets={sessionSets.filter((s) => s.exerciseId === e.id)}
               open={open === e.id}
@@ -308,8 +310,11 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   );
 }
 
-function ExerciseCard({ ex, ms, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
-  const target = nextTarget(ex, rec, ms);
+function ExerciseCard({ ex, ms, goals, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; goals: Goal[]; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
+  const target = nextTarget(ex, rec, ms, goals);
+  const goal = goalFor(ex, goals);
+  const gt = goal && (ms.includes('reps') || ms.includes('weight')) ? GOAL_TARGETS[goal] : null;
+  const [demo, setDemo] = useState(false);
   const fromTarget = (): Partial<WorkSet> => ({ reps: target.reps, seconds: target.seconds, weightKg: target.weightKg, distanceKm: target.distanceKm });
   const [v, setV] = useState<Partial<WorkSet>>(fromTarget);
   const [measuring, setMeasuring] = useState(false);
@@ -323,9 +328,9 @@ function ExerciseCard({ ex, ms, rec, sets, open, inPlan, onToggle, session, onLo
 
   const last = rec?.last;
   const cardio = isCardioFlow(ms);
-  const canLog = ms.some((m) => ((m === 'reps' ? v.reps : m === 'time' ? v.seconds : m === 'weight' ? v.weightKg : v.distanceKm) ?? 0) > 0);
+  const canLog = ms.some((m) => ((m === 'reps' ? v.reps : m === 'time' || m === 'speed' ? v.seconds : m === 'weight' ? v.weightKg : v.distanceKm) ?? 0) > 0);
   const log = async () => {
-    const values = { reps: ms.includes('reps') ? v.reps : undefined, seconds: ms.includes('time') ? v.seconds : undefined, weightKg: ms.includes('weight') ? v.weightKg : undefined };
+    const values = { reps: ms.includes('reps') ? v.reps : undefined, seconds: ms.includes('time') || ms.includes('speed') ? v.seconds : undefined, weightKg: ms.includes('weight') ? v.weightKg : undefined };
     const r = await logSet(session.id, ex.id, values);
     if (r.isPR) {
       setGlow(true);
@@ -363,10 +368,20 @@ function ExerciseCard({ ex, ms, rec, sets, open, inPlan, onToggle, session, onLo
             </div>
           </div>
           <p className="small muted">{target.label}</p>
+          {gt && (
+            <p className="small goal-line">
+              🎯 {gt.label}: {gt.low}–{gt.high} reps × {gt.sets} sets, rest {gt.restSec} s
+            </p>
+          )}
           <p className="small muted">💡 {ex.cue}</p>
-          <button className="btn ghost" style={{ alignSelf: 'flex-start', minHeight: 36, padding: '6px 12px' }} onClick={() => setMeasuring(true)}>
-            📏 Measured by: {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join(' + ')}
-          </button>
+          <div className="row wrap">
+            <button className="btn ghost icon-btn" onClick={() => setDemo(true)}>
+              ▶ How to do it
+            </button>
+            <button className="btn ghost icon-btn" onClick={() => setMeasuring(true)}>
+              📏 {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join(' + ')}
+            </button>
+          </div>
 
           {cardio ? (
             <button className="btn primary big" onClick={() => startCardio(session.id, ex.id)}>
@@ -398,6 +413,7 @@ function ExerciseCard({ ex, ms, rec, sets, open, inPlan, onToggle, session, onLo
         </>
       )}
       {measuring && <MeasureSheet ex={ex} current={ms} onClose={() => setMeasuring(false)} />}
+      {demo && <ExerciseDemo ex={ex} onClose={() => setDemo(false)} />}
       {editing && <EditSetSheet ex={ex} ms={ms} set={editing} onClose={() => setEditing(null)} />}
     </div>
   );
@@ -416,12 +432,13 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
   const rec = game.d!.stats.records.get(ex.id);
   const c = cardioTotals(live, now)!;
   const total = c.run + c.walk + c.rest;
-  const target = nextTarget(ex, rec, ms);
+  const target = nextTarget(ex, rec, ms, game.profile!.goals ?? []);
   const [stopping, setStopping] = useState(false);
   const [km, setKm] = useState(target.distanceKm ?? 1);
+  const [reps, setReps] = useState(target.reps ?? 0);
 
   const save = async () => {
-    const r = await finishCardio(session.id, km);
+    const r = await finishCardio(session.id, km, ms.includes('reps') ? reps : undefined);
     setStopping(false);
     if (r) toast(r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${km} km` : `${ex.name} saved: ${km} km`);
   };
@@ -471,6 +488,7 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
           <h2>How far did you go?</h2>
           <p className="muted small">Time: {fmtClock(total)}. Check your watch, treadmill or map app.</p>
           <Stepper label="Distance" unit="km" value={km} step={0.1} onChange={setKm} />
+          {ms.includes('reps') && <Stepper label="Hard intervals done" value={reps} onChange={(x) => setReps(Math.round(x))} />}
           {km > 0 && total > 0 && <p className="small muted">Pace: {fmtPace(total / 60 / km)} per km</p>}
           <div className="row">
             <button

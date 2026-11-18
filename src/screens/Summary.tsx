@@ -78,6 +78,7 @@ export function Summary({ s, onClose, avatarStyle, measuresOf }: { s: SessionSum
       {s.unlocked.length > 0 && (
         <div className="card stack pop" style={{ borderColor: 'var(--good)' }}>
           <h2>🎁 Surprise unlocked!</h2>
+          <span className="small muted">Added to your exercise inventory. Try it when you like; it is optional.</span>
           {s.unlocked.map((id) => (
             <span key={id}>
               <b>{EXERCISE_BY_ID[id]?.name}</b> <span className="small muted">— {EXERCISE_BY_ID[id]?.cue}</span>

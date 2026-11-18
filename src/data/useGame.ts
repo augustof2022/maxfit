@@ -1,6 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
-import { availableExercises, deriveGame, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals } from '../core/rules';
+import { availableExercises, deriveGame, fitsEquipment, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals, ownedEquipment } from '../core/rules';
+import { EXERCISE_BY_ID } from '../core/exercises';
+import type { Exercise } from '../core/types';
 import { db } from './db';
 
 /** Everything the screens need, live from the local database. */
@@ -16,7 +18,12 @@ export function useGame() {
     if (!profile) return null;
     const now = Date.now();
     const liveSets = sets.filter((s) => !s.deleted);
-    const { xp, stats, unlocked, measuresOf } = deriveGame(profile, sessions, liveSets, now);
+    const { xp, stats, unlocked: unlockedAll, measuresOf } = deriveGame(profile, sessions, liveSets, now);
+    // Only moves the user can do with equipment from any of their places are shown (Renz, 2026-11-18).
+    // Others stay hidden until that equipment is added to a place.
+    const owned = ownedEquipment(locations);
+    const canDo = (e: Exercise) => fitsEquipment(e, owned);
+    const unlocked = unlockedAll.filter((id) => canDo(EXERCISE_BY_ID[id]));
     const lp = levelProgress(xp);
     const active = sessions.find((s) => s.status === 'active' && !s.deleted) ?? null;
     const location = locations.find((l) => l.id === (active?.locationId ?? profile.lastLocationId)) ?? locations[0] ?? null;
@@ -28,6 +35,9 @@ export function useGame() {
       stage: avatarStage(lp.level),
       gear: gearFor(unlocked.length),
       unlocked,
+      unlockedAll,
+      owned,
+      canDo,
       measuresOf,
       xp,
       goalMin: habitTarget(sessions, profile.habitBaseMin, profile.habitCapMin),
