@@ -26,7 +26,7 @@ import {
   visibleUnlocks,
   xpForLevel,
 } from './rules';
-import { beats, measuresFor } from './measures';
+import { beatFor, beats, measuresFor } from './measures';
 import type { Session, WorkSet } from './types';
 
 const DAY = 86_400_000;
@@ -163,6 +163,19 @@ describe('records and targets', () => {
   it('same weight: a first set at a LIGHTER weight is not a record; beating it later at that weight is', () => {
     const sets = [set('db_row', { weightKg: 20, reps: 10 }, 1), set('db_row', { weightKg: 12.5, reps: 15 }, 2), set('db_row', { weightKg: 12.5, reps: 16 }, 3)];
     expect([...prFlags(sets).values()]).toEqual([false, false, true]);
+  });
+  it('an empty set (0 reps) at a heavy weight does not hide the real new-weight record after it', () => {
+    const sets = [set('db_row', { weightKg: 20, reps: 10 }, 1), set('db_row', { weightKg: 50, reps: 0 }, 2), set('db_row', { weightKg: 50, reps: 5 }, 3)];
+    expect([...prFlags(sets).values()]).toEqual([false, false, true]);
+  });
+  it('sprints logged before distances existed count as 100 m', () => {
+    const r = computeRecords([set('sprint_100m', { seconds: 16 }, 1), set('sprint_100m', { distanceKm: 0.1, seconds: 15.5 }, 2)]).get('sprint_100m')!;
+    expect(r.levels.get(0.1)?.seconds).toBe(15.5);
+  });
+  it('an older "measured by" choice (v0.2) keeps the "beat any number" rule', () => {
+    expect(beatFor(EXERCISE_BY_ID.db_row, {}, { db_row: ['reps'] })).toEqual({ kind: 'any' });
+    expect(beatFor(EXERCISE_BY_ID.db_row, {}, {})).toEqual({ kind: 'same', fixed: 'weight', beat: 'reps' });
+    expect(measuresFor(EXERCISE_BY_ID.db_row, { db_row: ['reps'] }, beatFor(EXERCISE_BY_ID.db_row, {}, { db_row: ['reps'] }))).toEqual(['reps']);
   });
   it('same weight: at the top of the rep range the target is to move up', () => {
     const ex = EXERCISE_BY_ID.db_row;

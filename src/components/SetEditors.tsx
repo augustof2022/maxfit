@@ -220,7 +220,7 @@ export function MeasureInputs({ ms, v, onChange, beat }: { ms: Measure[]; v: Par
 }
 
 /** Correct or delete one logged set, with "are you sure?". */
-export function EditSetSheet({ ex, ms, set, onClose }: { ex: Exercise; ms: Measure[]; set: WorkSet; onClose: () => void }) {
+export function EditSetSheet({ ex, ms, beat, set, onClose }: { ex: Exercise; ms: Measure[]; beat: Beat; set: WorkSet; onClose: () => void }) {
   // Show every measure the set has a number for, plus the ones tracked now.
   const shown = MEASURES.map((m) => m.id).filter((m) => ms.includes(m) || (m === 'weight' && set.weightKg) || (m === 'reps' && set.reps) || (m === 'distance' && set.distanceKm) || (m === 'time' && !ms.includes('speed') && (set.seconds || set.durationSec)));
   const [v, setV] = useState<Partial<WorkSet>>({ reps: set.reps, seconds: set.seconds, weightKg: set.weightKg, distanceKm: set.distanceKm, durationSec: set.durationSec });
@@ -238,7 +238,7 @@ export function EditSetSheet({ ex, ms, set, onClose }: { ex: Exercise; ms: Measu
     <Sheet onClose={onClose}>
       <h2>Edit set · {ex.name}</h2>
       <p className="small muted">{new Date(set.at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
-      <MeasureInputs ms={shown} v={v} onChange={setV} />
+      <MeasureInputs ms={shown} v={v} onChange={setV} beat={beat} />
       <div className="row">
         <button className="btn danger" onClick={remove}>
           Delete

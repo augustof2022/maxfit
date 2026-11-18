@@ -48,3 +48,8 @@
 ## 2026-11-18 — Round 3: "How to beat it" (Renz approved; PR #3 merged first)
 - Mode any / same; records per weight or distance; NEW WEIGHT records; sprint distance in meters; live target per typed weight.
 - Checks: typecheck clean; 81 unit tests; e2e 31/31; balance unchanged.
+- Review (code-reviewer, high): pass with fixes → fixed all 5: sprint set edits save the right field (meters, seconds);
+  v0.2 "measured by" choices keep "beat any number"; one-time re-check of old record flags after the update
+  (meta recordRules = 2); empty sets cannot raise the heaviest-weight mark and cannot be logged in "same" mode;
+  old sprints without a distance count as 100 m; the reps box follows the typed weight; "at bodyweight" for 0 kg.
+- Checks: 85 unit tests, e2e 31/31.

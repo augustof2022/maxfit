@@ -74,6 +74,23 @@ export async function ensureSeed(): Promise<void> {
   });
 }
 
+/**
+ * Version of the record rules. When it goes up, every stored record flag (and the XP it gave) is checked
+ * again once, so old sets follow the new rules (2 = "how to beat it", 2026-11-18).
+ */
+export const RECORD_RULES_VERSION = 2;
+
+export async function migrateRecords(): Promise<boolean> {
+  const done = ((await db.meta.get('recordRules'))?.value as number | undefined) ?? 0;
+  if (done >= RECORD_RULES_VERSION) return false;
+  await db.transaction('rw', [db.profile, db.sets, db.sessions, db.meta], async () => {
+    const ids = [...new Set((await db.sets.toArray()).filter((x) => !x.deleted).map((x) => x.exerciseId))];
+    await reconcileRecords(ids);
+    await db.meta.put({ key: 'recordRules', value: RECORD_RULES_VERSION });
+  });
+  return true;
+}
+
 export async function getProfile(): Promise<Profile> {
   return (await db.profile.get('me')) ?? defaultProfile();
 }
@@ -83,7 +100,7 @@ export async function updateProfile(patch: Partial<Profile>): Promise<void> {
 }
 
 function beatOfProfile(p: Profile): BeatOf {
-  return (ex) => beatFor(ex, p.exerciseBeat);
+  return (ex) => beatFor(ex, p.exerciseBeat, p.exerciseMeasures);
 }
 
 function measuresOfProfile(p: Profile): MeasuresOf {

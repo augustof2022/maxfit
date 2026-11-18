@@ -30,8 +30,9 @@ export function defaultBeat(ex: Exercise): Beat {
   return ANY;
 }
 
-export function beatFor(ex: Exercise, overrides?: Record<string, Beat | undefined> | null): Beat {
-  return overrides?.[ex.id] ?? defaultBeat(ex);
+/** The user's choice, else: an older "measured by" choice (v0.2) means "beat any number", else the default. */
+export function beatFor(ex: Exercise, overrides?: Record<string, Beat | undefined> | null, measureOverrides?: MeasureOverrides | null): Beat {
+  return overrides?.[ex.id] ?? (measureOverrides?.[ex.id]?.length ? ANY : defaultBeat(ex));
 }
 
 /** In "same" mode: the fixed value of a set (its weight in kg or distance in km), rounded; else null. */
@@ -43,7 +44,8 @@ export function levelOf(beat: Beat, s: Partial<WorkSet>): number | null {
 /** "at 30 kg", "over 100 m". */
 export function fmtLevel(beat: Beat, level: number): string {
   if (beat.kind !== 'same') return '';
-  return beat.fixed === 'weight' ? `at ${level} kg` : `over ${fmtDistance(level)}`;
+  if (beat.fixed === 'weight') return level > 0 ? `at ${level} kg` : 'at bodyweight';
+  return `over ${fmtDistance(level)}`;
 }
 
 export function fmtDistance(km: number): string {

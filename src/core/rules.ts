@@ -124,7 +124,9 @@ function walk(sets: WorkSet[], measuresOf: MeasuresOf, beatOf: BeatOf) {
     const r: ExRecord = records.get(s.exerciseId) ?? { exerciseId: s.exerciseId, best: 0, bests: {}, bestSet: null, last: null, count: 0, bestPace: null, beat: bt, levels: new Map(), maxLevel: 0 };
     let isPR = false;
     if (bt.kind === 'same') {
-      const lvl = levelOf(bt, s)!;
+      let lvl = levelOf(bt, s)!;
+      // Sprints logged before distances existed (no distance) count as the old 100 m.
+      if (bt.fixed === 'distance' && lvl === 0 && s.exerciseId === 'sprint_100m') lvl = 0.1;
       const prev = r.levels.get(lvl);
       if (prev) {
         isPR = beats([bt.beat], s, prev);
@@ -133,7 +135,8 @@ function walk(sets: WorkSet[], measuresOf: MeasuresOf, beatOf: BeatOf) {
         isPR = bt.fixed === 'weight' && r.count > 0 && lvl > r.maxLevel;
         r.levels.set(lvl, s);
       }
-      if (lvl > r.maxLevel) r.maxLevel = lvl;
+      // Only a real set (beaten number above 0) can raise the heaviest-weight mark.
+      if (lvl > r.maxLevel && hasValue([bt.beat], s)) r.maxLevel = lvl;
       r.bestSet = r.levels.get(lvl) ?? r.bestSet;
     } else if (r.bestSet) {
       isPR = beats(ms, s, r.bestSet);
@@ -439,7 +442,7 @@ export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now
 
 /** Everything derived from the data in one call: XP, stats and unlocks. */
 export function deriveGame(profile: { unlocked: string[]; exerciseMeasures?: Record<string, Measure[]>; exerciseBeat?: Record<string, Beat> }, sessions: Session[], sets: WorkSet[], now: number) {
-  const beatOf: BeatOf = (ex) => beatFor(ex, profile.exerciseBeat);
+  const beatOf: BeatOf = (ex) => beatFor(ex, profile.exerciseBeat, profile.exerciseMeasures);
   const measuresOf: MeasuresOf = (ex) => measuresFor(ex, profile.exerciseMeasures, beatOf(ex));
   const xp = totalXp(sessions);
   const stats = buildStats(sessions, sets, xp, now, measuresOf, beatOf);

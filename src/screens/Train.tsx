@@ -331,6 +331,13 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
   const typedLevel = levelOf(beat, v);
   const target = beat.kind === 'same' && typedLevel !== null ? nextTarget(ex, rec, ms, goals, beat, typedLevel) : baseTarget;
   const levelBest = beat.kind === 'same' && typedLevel !== null ? rec?.levels.get(typedLevel) : rec?.bestSet;
+  // When the user changes the weight / distance, put that level's number to beat in the box.
+  const prevLevel = useRef(typedLevel);
+  useEffect(() => {
+    if (beat.kind !== 'same' || prevLevel.current === typedLevel) return;
+    prevLevel.current = typedLevel;
+    setV((cur) => (beat.beat === 'reps' ? { ...cur, reps: target.reps ?? cur.reps } : { ...cur, seconds: target.seconds ?? cur.seconds }));
+  }, [typedLevel]); // eslint-disable-line react-hooks/exhaustive-deps
   const [measuring, setMeasuring] = useState(false);
   const [editing, setEditing] = useState<WorkSet | null>(null);
   const [glow, setGlow] = useState(false);
@@ -342,7 +349,9 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
 
   const last = rec?.last;
   const cardio = isCardioFlow(ms, beat);
-  const canLog = ms.some((m) => ((m === 'reps' ? v.reps : m === 'time' || m === 'speed' ? v.seconds : m === 'weight' ? v.weightKg : v.distanceKm) ?? 0) > 0);
+  const beatenValue = beat.kind === 'same' ? (beat.beat === 'reps' ? v.reps : v.seconds) ?? 0 : 0;
+  const sameOk = beat.kind !== 'same' || (beatenValue > 0 && (beat.fixed !== 'distance' || (v.distanceKm ?? 0) > 0));
+  const canLog = sameOk && ms.some((m) => ((m === 'reps' ? v.reps : m === 'time' || m === 'speed' ? v.seconds : m === 'weight' ? v.weightKg : v.distanceKm) ?? 0) > 0);
   const log = async () => {
     const values = {
       reps: ms.includes('reps') ? v.reps : undefined,
@@ -433,7 +442,7 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
       )}
       {measuring && <MeasureSheet ex={ex} current={ms} beat={beat} onClose={() => setMeasuring(false)} />}
       {demo && <ExerciseDemo ex={ex} known={known} onClose={() => setDemo(false)} />}
-      {editing && <EditSetSheet ex={ex} ms={ms} set={editing} onClose={() => setEditing(null)} />}
+      {editing && <EditSetSheet ex={ex} ms={ms} beat={beat} set={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

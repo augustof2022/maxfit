@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { totalXp } from '../core/rules';
 import { db } from './db';
-import { addEquipment, deleteEquipment, deleteSession, deleteSet, ensureSeed, exportAll, finishSession, importAll, logSet, resetTrainingData, setExerciseMeasures, setExerciseTrack, setMode, startSession, updateSession, updateSet, updateWeight, addWeight } from './repo';
+import { addEquipment, deleteEquipment, deleteSession, deleteSet, ensureSeed, exportAll, finishSession, importAll, logSet, resetTrainingData, setExerciseMeasures, setExerciseTrack, migrateRecords, setMode, startSession, updateSession, updateSet, updateWeight, addWeight } from './repo';
 
 beforeEach(async () => {
   await Promise.all([db.photos.clear(), db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
@@ -208,6 +208,18 @@ describe('edit and delete (Renz, 2026-11-18)', () => {
     expect(heavier).toMatchObject({ isPR: true, newWeight: true });
     await setExerciseTrack('db_row', { kind: 'any' }, ['weight', 'reps']);
     expect((await db.sets.get(heavier.set.id))!.isPR).toBe(false); // rule A: reps went down
+  });
+
+  it('after the update, old record flags are checked once against the new rules (and XP follows)', async () => {
+    const s = await startSession('gym');
+    await logSet(s.id, 'db_row', { weightKg: 20, reps: 10 });
+    const heavy = await logSet(s.id, 'db_row', { weightKg: 25, reps: 8 });
+    await finishSession(s.id);
+    await db.sets.update(heavy.set.id, { isPR: false }); // as v0.2 (rule A) stored it
+    await db.meta.delete('recordRules');
+    expect(await migrateRecords()).toBe(true);
+    expect((await db.sets.get(heavy.set.id))!.isPR).toBe(true);
+    expect(await migrateRecords()).toBe(false); // only once
   });
 
   it('reset deletes training data but keeps places', async () => {
