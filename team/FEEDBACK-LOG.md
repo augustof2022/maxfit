@@ -11,3 +11,4 @@ Renz's feedback, newest first. Format: date — for which agent — what he said
 - 2026-11-18 — backend-dev — "Unlock only with a real record; corrections and deletes ask 'are you sure?'." — Derive unlocks from data; confirm every change.
 - 2026-11-18 — exercise-scientist, game-designer — "Level-ups can be variations, optional, into my inventory; never something I can't do with my equipment." — Variations with a base move; equipment-aware surprises.
 - 2026-11-18 — release-engineer, maxfit-pm — "Where do I put the env, is it maxfit.env?" — For the phone app there is no file: GitHub Variables. The file name, only for a computer, is `.env`.
+- 2026-11-18 — game-designer, exercise-scientist, maxfit-pm — "A sprint is a race sprint: same distance, measure the speed. A barbell at a fixed weight: how many reps. If I raise the weight, my reps drop — handle that; if I still beat the reps, good." — Records per fixed weight/distance; "how to beat" configurable per exercise.
