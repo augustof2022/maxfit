@@ -25,7 +25,6 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
   const [importing, setImporting] = useState(false);
   if (!location) return null;
   const plans = plansAt(game.plans, location.id, game.planUsed);
-  const active = !!game.d!.active;
 
   const open = (p: Plan) => {
     const next = openId === p.id ? null : p.id;
@@ -73,7 +72,7 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
                     </span>
                     {isOpen ? <ChevronUp size={20} className="chev" aria-hidden /> : <ChevronDown size={20} className="chev" aria-hidden />}
                   </button>
-                  <button className="btn primary sm" onClick={() => onStart(p.id)} disabled={active} aria-label={`Start ${p.name}`}>
+                  <button className="btn primary sm" onClick={() => onStart(p.id)} aria-label={`Start ${p.name}`}>
                     <Play size={16} aria-hidden /> Start
                   </button>
                 </div>
@@ -83,7 +82,11 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
                     plan={p}
                     onEdit={() => edit(p)}
                     onDuplicate={async () => {
-                      const id = await duplicatePlan(p.id);
+                      const id = await duplicatePlan(p.id).catch((e: Error) => {
+                        toast(e.message);
+                        return null;
+                      });
+                      if (!id) return;
                       setOpenId(id);
                       toast('Plan duplicated. Rename it and change what you like.');
                       const copy = await db.plans.get(id);
@@ -102,7 +105,6 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
           })}
         </div>
       )}
-      {active && <p className="small faint">A session is running. Finish it to start another plan.</p>}
       {plans.length > 0 && (
         <button className="btn quiet" style={{ alignSelf: 'flex-start' }} onClick={() => setImporting(true)}>
           <Download size={18} aria-hidden /> Import a plan from another place
@@ -206,6 +208,9 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
   const dirty = name !== draft.name || description !== draft.description || locationId !== draft.locationId || JSON.stringify(items) !== JSON.stringify(draft.items);
   const isNew = !draft.id;
   const nameRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // Focus moves into the page (its title), so a screen reader and the keyboard start here.
+  useEffect(() => titleRef.current?.focus(), []);
 
   useEffect(() => setErr(null), [name, locationId, items]);
   // The page is a dialog: lock the app behind it from scrolling.
@@ -218,7 +223,7 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
   }, []);
 
   const close = async () => {
-    if (dirty && !(await confirmAsk({ title: 'Leave without saving?', body: 'Your changes to this plan are lost.', ok: 'Leave', danger: true }))) return;
+    if (dirty && !(await confirmAsk({ title: 'Leave without saving?', body: 'Your changes to this plan are lost. (A "How to beat it" change is already saved for that exercise.)', ok: 'Leave', danger: true }))) return;
     onClose();
   };
   const save = async () => {
@@ -247,7 +252,9 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
         <button className="btn icon secondary" onClick={close} aria-label="Close">
           <X size={20} aria-hidden />
         </button>
-        <h1>{isNew ? 'New plan' : 'Edit plan'}</h1>
+        <h1 ref={titleRef} tabIndex={-1}>
+          {isNew ? 'New plan' : 'Edit plan'}
+        </h1>
         <button className="btn quiet" onClick={save} disabled={busy}>
           Save
         </button>

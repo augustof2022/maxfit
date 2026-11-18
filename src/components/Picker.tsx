@@ -61,6 +61,7 @@ export function ExercisePicker({ game, locationId, added, onAdd }: { game: Game;
   const chips = areaChips(doable);
   const list = filterExercises(doable, { query, area, kit });
   const filtered = query !== '' || area !== 'all' || kit !== 'any';
+  const [announce, setAnnounce] = useState('');
 
   return (
     <div className="stack" style={{ gap: 0 }}>
@@ -135,7 +136,7 @@ export function ExercisePicker({ game, locationId, added, onAdd }: { game: Game;
                     <CirclePlay size={18} aria-hidden /> Watch the steps
                   </button>
                   {isAdded ? (
-                    <span className="added-mark" role="status" aria-label={`${ex.name} added`}>
+                    <span className="added-mark">
                       <Check size={18} aria-hidden /> Added
                     </span>
                   ) : (
@@ -150,6 +151,9 @@ export function ExercisePicker({ game, locationId, added, onAdd }: { game: Game;
         </ul>
       )}
 
+      <span className="vh" role="status" aria-live="polite">
+        {announce}
+      </span>
       {configuring && (
         <ConfigSheet
           game={game}
@@ -157,7 +161,10 @@ export function ExercisePicker({ game, locationId, added, onAdd }: { game: Game;
           okLabel="Add to plan"
           onClose={(item) => {
             setConfiguring(null);
-            if (item) onAdd(item);
+            if (item) {
+              onAdd(item);
+              setAnnounce(`${configuring.name} added`);
+            }
           }}
         />
       )}
@@ -194,12 +201,20 @@ export function ConfigSheet({ game, ex, item, okLabel, onClose }: { game: Game; 
   const [target, setTarget] = useState<PlanTarget>(item?.target ?? suggested());
   const [busy, setBusy] = useState(false);
 
+  const [err, setErr] = useState<string | null>(null);
   const confirm = async () => {
     if (beatChanged) {
-      if (rec && !(await confirmAsk({ title: `Beat ${ex.name} a new way?`, body: `"${options.find((o) => o.id === choice)!.label}" applies to ${ex.name} everywhere. Your records for it are checked again.`, ok: 'Change' }))) return;
+      // "How to beat it" belongs to the exercise, so it is saved now (not with the plan): say so plainly.
+      if (rec && !(await confirmAsk({ title: `Beat ${ex.name} a new way?`, body: `"${options.find((o) => o.id === choice)!.label}" is saved for ${ex.name} everywhere right away, even if you leave this plan without saving. Your records for it are checked again.`, ok: 'Change' }))) return;
       setBusy(true);
-      // "Beat any number" is stored with its measures, so it never falls back to a lift's default (same weight).
-      await setExerciseTrack(ex.id, beat, beat.kind === 'any' ? ms : []);
+      try {
+        // "Beat any number" is stored with its measures, so it never falls back to a lift's default (same weight).
+        await setExerciseTrack(ex.id, beat, beat.kind === 'any' ? ms : []);
+      } catch (e) {
+        setErr((e as Error).message);
+        setBusy(false);
+        return;
+      }
     }
     onClose({ exerciseId: ex.id, sets: Math.max(1, Math.min(PLAN_MAX_SETS, Math.round(sets))), target: cleanTarget(target) });
   };
@@ -237,7 +252,12 @@ export function ConfigSheet({ game, ex, item, okLabel, onClose }: { game: Game; 
             </button>
           ))}
         </div>
-        {beatChanged && <span className="small faint">Applies to {ex.name} everywhere; your records are checked again.</span>}
+        {beatChanged && <span className="small faint">Saved for {ex.name} everywhere when you tap {okLabel}; your records are checked again.</span>}
+        {err && (
+          <p className="small banner" role="alert">
+            {err}
+          </p>
+        )}
       </div>
       <div className="row sheet-footer">
         <button className="btn secondary grow" onClick={() => onClose()}>

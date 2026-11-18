@@ -78,6 +78,8 @@ function PreSession({ game, toast }: Props) {
     try {
       await startSession(loc?.id ?? null, planId);
       void keepAwake(true);
+    } catch (e) {
+      toast((e as Error).message);
     } finally {
       setBusy(false);
     }

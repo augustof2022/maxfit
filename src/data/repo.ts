@@ -248,33 +248,42 @@ export const starterPlanId = (locationId: string) => `starter-${locationId}`;
  * updatedAt 0 (like the seed places), so a real copy from the cloud always wins over them.
  */
 export async function ensureStarterPlans(now = Date.now()): Promise<number> {
-  return db.transaction('rw', [db.plans, db.profile, db.locations, db.sessions, db.sets], async () => {
-    const profile = await getProfile();
-    const places = (await db.locations.toArray()).filter((l) => !l.deleted);
-    const sessions = await db.sessions.toArray();
-    const sets = (await db.sets.toArray()).filter((x) => !x.deleted);
-    const { unlocked: all, stats } = deriveGame(profile, sessions, sets, now);
-    const owned = ownedEquipment(places);
-    const unlocked = visibleUnlocks(all, (e) => fitsEquipment(e, owned), profile.revealed);
+  // Cheap check first (runs at start, after every sync and when a place is saved): usually nothing is missing.
+  const places = (await db.locations.toArray()).filter((l) => !l.deleted);
+  const have = new Set((await db.plans.bulkGet(places.map((l) => starterPlanId(l.id)))).filter(Boolean).map((p) => p!.id));
+  const missing = places.filter((l) => !have.has(starterPlanId(l.id)));
+  if (!missing.length) return 0;
+  // Work out the exercises outside any write lock, so a set being logged never waits on this.
+  const profile = await getProfile();
+  const sessions = await db.sessions.toArray();
+  const sets = (await db.sets.toArray()).filter((x) => !x.deleted);
+  const { unlocked: all, stats } = deriveGame(profile, sessions, sets, now);
+  const owned = ownedEquipment(places);
+  const unlocked = visibleUnlocks(all, (e) => fitsEquipment(e, owned), profile.revealed);
+  const rows: Plan[] = [];
+  for (const loc of missing) {
+    const here = availableExercises(unlocked, loc.equipment);
+    const pick = starterPlan(here, stats.sessions, profile.goals, profile.focus);
+    const items = (pick.length ? pick : suggestedPlan(here, profile.goals, profile.focus, 3)).slice(0, 3);
+    if (!items.length) continue;
+    rows.push({
+      id: starterPlanId(loc.id),
+      name: 'Starter plan',
+      description: 'Short on purpose: a few exercises to build the habit. Edit, rename or delete it.',
+      locationId: loc.id,
+      items: items.map((it) => ({ exerciseId: it.exerciseId, sets: it.sets, target: {} })),
+      createdAt: now,
+      lastUsedAt: null,
+      lastViewedAt: null,
+      updatedAt: 0,
+    });
+  }
+  // A short write on plans only; checking again inside it keeps two runs at once from making two rows.
+  return db.transaction('rw', db.plans, async () => {
     let made = 0;
-    for (const loc of places) {
-      const id = starterPlanId(loc.id);
-      if (await db.plans.get(id)) continue;
-      const here = availableExercises(unlocked, loc.equipment);
-      const pick = starterPlan(here, stats.sessions, profile.goals, profile.focus);
-      const items = (pick.length ? pick : suggestedPlan(here, profile.goals, profile.focus, 3)).slice(0, 3);
-      if (!items.length) continue;
-      await db.plans.put({
-        id,
-        name: 'Starter plan',
-        description: 'Short on purpose: a few exercises to build the habit. Edit, rename or delete it.',
-        locationId: loc.id,
-        items: items.map((it) => ({ exerciseId: it.exerciseId, sets: it.sets, target: {} })),
-        createdAt: now,
-        lastUsedAt: null,
-        lastViewedAt: null,
-        updatedAt: 0,
-      });
+    for (const row of rows) {
+      if (await db.plans.get(row.id)) continue;
+      await db.plans.put(row);
       made++;
     }
     return made;
@@ -747,4 +756,5 @@ export async function wipeLocal(): Promise<void> {
     await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear(), db.photos.clear(), db.plans.clear()]);
   });
   await ensureSeed();
+  await ensureStarterPlans();
 }

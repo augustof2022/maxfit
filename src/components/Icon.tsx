@@ -6,7 +6,57 @@ import type { LucideIcon, LucideProps } from 'lucide-react';
 import { Bike, Dumbbell, Footprints, House, MapPin, Repeat, Timer, Trees, Weight, Zap } from 'lucide-react';
 import type { Location, Measure } from '../core/types';
 
-export * from 'lucide-react';
+// Only the icons the app uses (named, so the dev server and the bundle stay small).
+export {
+  Activity,
+  AlarmClock,
+  ArrowDown,
+  ArrowUp,
+  Camera,
+  ChartColumn,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  CircleCheck,
+  CirclePlay,
+  Copy,
+  Download,
+  Dumbbell,
+  Flame,
+  Footprints,
+  Gift,
+  HeartPulse,
+  House,
+  ImageIcon,
+  KeyRound,
+  Lightbulb,
+  Lock,
+  Palette,
+  Pause,
+  Pencil,
+  PersonStanding,
+  Play,
+  Plus,
+  RefreshCw,
+  Ruler,
+  Scale,
+  Search,
+  Settings,
+  Share2,
+  Sparkles,
+  Square,
+  Star,
+  Timer,
+  Trash2,
+  TrendingUp,
+  TriangleAlert,
+  Trophy,
+  Upload,
+  X,
+  Zap,
+} from 'lucide-react';
+export type { LucideIcon } from 'lucide-react';
 
 /** Default size 20, stroke 2. Decorative unless a label is given. */
 export function Ico({ as: Cmp, size = 20, label, ...rest }: { as: LucideIcon; size?: number; label?: string } & Omit<LucideProps, 'ref'>) {

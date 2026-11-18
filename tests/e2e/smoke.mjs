@@ -249,7 +249,7 @@ try {
   await page.getByRole('button', { name: 'More Sets' }).click();
   await shot('19b-config-sheet');
   await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
-  check('Back in the list with the search kept; the row shows Added', (await page.getByRole('searchbox', { name: 'Search exercises' }).inputValue()) === 'push up' && (await page.getByRole('status', { name: 'Push-up added' }).count()) === 1);
+  check('Back in the list with the search kept; the row shows Added', (await page.getByRole('searchbox', { name: 'Search exercises' }).inputValue()) === 'push up' && (await pushRow.getByText('Added', { exact: true }).count()) === 1 && (await page.getByRole('status').filter({ hasText: 'Push-up added' }).count()) === 1);
   await page.getByRole('searchbox', { name: 'Search exercises' }).fill('');
   for (const n of ['Dumbbell curl', 'Run in place']) {
     await page.getByRole('button', { name: `Add ${n}`, exact: true }).click();
@@ -285,6 +285,17 @@ try {
   await page.getByRole('button', { name: 'Edit plan', exact: true }).click();
   await page.getByRole('button', { name: 'Remove Dumbbell curl' }).click();
   await shot('21b-plan-edit');
+  // Code review round 5: a confirm opened from the editor must be on top and tappable.
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  const leave = page.getByRole('button', { name: 'Leave', exact: true });
+  await leave.waitFor();
+  const onTop = await leave.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && (hit === el || el.contains(hit));
+  });
+  check('"Leave without saving?" shows on top of the plan editor and can be tapped', onTop);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: /^Save plan/ }).click();
   await page.waitForTimeout(300);
   const counts = await page.evaluate(async () => {

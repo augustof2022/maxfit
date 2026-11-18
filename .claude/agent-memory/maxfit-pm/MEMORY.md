@@ -28,3 +28,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-18: Splitting work by FILE OWNERSHIP let frontend-dev build items 6-8 in parallel with zero merge conflicts.
 - 2026-11-18: In LWW sync, never bump updatedAt for view/use stamps; keep them per device or derive them (code review found plan views overwrote edits).
 - 2026-11-18: Renz's standing rule: all design/UI work uses the skills taste-skill and impeccable (load with the Skill tool first). If not installed, report the gap and follow their sources + docs/DESIGN.md.
+- 2026-11-18: A new full-screen layer (plan editor) hid every confirm sheet; e2e needs an elementFromPoint 'on top and tappable' check for overlays. Proved the check by reverting the fix once.
