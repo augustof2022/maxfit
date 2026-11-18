@@ -204,15 +204,15 @@ try {
 
   // New place: type a name, pick equipment from the library, add a custom item.
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: '+ New place' }).click();
+  await page.getByRole('button', { name: 'New place', exact: true }).click();
   await page.getByPlaceholder(/Office gym/).fill('Office gym');
   await page.getByRole('button', { name: 'Dumbbells' }).click();
   await page.getByRole('searchbox', { name: 'Search equipment' }).fill('hip abductor');
   check('Search shows "not in the library yet"', await page.getByText('is not in the library yet').isVisible());
-  await page.getByRole('button', { name: /\+ Add new equipment/ }).click();
+  await page.getByRole('button', { name: /^Add new equipment/ }).click();
   await page.getByRole('button', { name: 'Add + select' }).click();
   await page.waitForTimeout(300);
-  check('Custom equipment added and selected', await page.getByRole('button', { name: /✓ hip abductor ★/ }).isVisible());
+  check('Custom equipment added and selected', (await page.getByRole('button', { name: 'hip abductor', exact: true }).getAttribute('aria-pressed')) === 'true');
   await shot('12-place-editor');
   await page.getByRole('button', { name: 'Save place' }).click();
   await page.waitForTimeout(300);
@@ -339,7 +339,7 @@ try {
   await page.getByRole('button', { name: 'History', exact: true }).click();
   const hist = page.getByRole('list', { name: 'Push-up by day' });
   await hist.waitFor();
-  check('History lists days with the best set and records marked', (await hist.getByRole('listitem').count()) >= 2 && (await hist.getByText('🏆 Record').count()) >= 1 && (await hist.getByText('8 reps').count()) === 1 && (await page.getByRole('img', { name: /Trend in reps/ }).count()) === 1);
+  check('History lists days with the best set and records marked', (await hist.getByRole('listitem').count()) >= 2 && (await hist.getByText('Record', { exact: true }).count()) >= 1 && (await hist.getByText('8 reps').count()) === 1 && (await page.getByRole('img', { name: /Trend in reps/ }).count()) === 1);
   await shot('25-history');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.mouse.wheel(0, 5000);
@@ -428,7 +428,7 @@ try {
   await page.waitForTimeout(500);
   await shot('17-photo-composer');
   const dl = page.waitForEvent('download');
-  await page.getByRole('button', { name: '⬇ Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await dl;
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   check('Photo saved to the timeline', (await page.getByRole('button', { name: /Photo from/ }).count()) === 1);

@@ -87,7 +87,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
           <h2>My places</h2>
           <button className="btn quiet" onClick={() => setEditing({ name: '', kind: 'gym', equipment: [] })}>
             <Ico as={Plus} size={18} />
-            <span className="vh">+ </span>New place
+            New place
           </button>
         </div>
         <p className="group-note">Name a place and pick its equipment once. When you train there, MaxFit loads it and shows only exercises you can do.</p>

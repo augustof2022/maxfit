@@ -325,7 +325,7 @@ function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; phot
         </button>
         <button className="btn secondary grow" onClick={() => act('save')} disabled={!out || busy}>
           <Ico as={Download} size={18} />
-          <span className="vh">⬇ </span>Save
+          Save
         </button>
         <button className="btn primary grow" onClick={() => act('share')} disabled={!out || busy}>
           <Ico as={Share2} size={18} />
@@ -366,7 +366,7 @@ function PhotoView({ photo, onClose, onEdit }: { photo: Photo; onClose: () => vo
         </button>
         <button className="btn secondary grow" onClick={async () => setMsg(await saveFile(photo.composite ?? photo.image, name, 'pictures').catch((e) => (e as Error).message))}>
           <Ico as={Download} size={18} />
-          <span className="vh">⬇ </span>Save
+          Save
         </button>
         <button className="btn primary grow" onClick={() => void shareFile(photo.composite ?? photo.image, name).catch(() => undefined)}>
           <Ico as={Share2} size={18} />

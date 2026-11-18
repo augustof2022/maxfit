@@ -120,13 +120,11 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
                   {eq.includes(e.id) && (
                     <>
                       <Ico as={Check} size={14} />
-                      <span className="vh">✓ </span>
                     </>
                   )}
                   {e.name}
                   {e.custom && (
                     <>
-                      <span className="vh"> ★</span>
                       <Ico as={Star} size={14} />
                     </>
                   )}
@@ -167,7 +165,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
           }}
         >
           <Ico as={Plus} size={18} />
-          <span className="vh">+ </span>Add new equipment{query ? ` "${query}"` : ''}
+          Add new equipment{query ? ` "${query}"` : ''}
         </button>
       )}
 

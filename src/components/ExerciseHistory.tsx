@@ -121,7 +121,7 @@ export function HistorySheet({ game, ex, onClose }: { game: Game; ex: Exercise; 
               <b>{fmtValues(shownMs, x.best)}</b> {x.record && (
                 <span className="badge pr">
                   <Ico as={Trophy} size={12} />
-                  <span className="vh">🏆 </span>Record
+                  Record
                 </span>
               )}
             </span>

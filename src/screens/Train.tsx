@@ -42,7 +42,7 @@ function LocationPicker({ game, value, onPick }: { game: Game; value: string | n
           <PlaceIcon kind={l.kind} /> {l.name}
         </button>
       ))}
-      <button className="chip" onClick={() => setAdding(true)} aria-label="+ New place">
+      <button className="chip" onClick={() => setAdding(true)} aria-label="New place">
         <Plus size={18} aria-hidden /> Place
       </button>
       {adding && (
