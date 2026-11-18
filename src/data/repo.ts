@@ -246,7 +246,10 @@ export async function logSet(sessionId: string, exerciseId: string, values: Pick
   const sets = await allSets();
   const before = computeRecords(sets, measuresOf, beatOf).get(exerciseId);
   const now = Date.now();
-  const set: WorkSet = { id: uid(), sessionId, exerciseId, at: now, ...values, isPR: false, updatedAt: now };
+  // Sets of one exercise are ordered by time; two sets in the same millisecond would be ordered by their
+  // random ids, so a set always gets a time after the last one of its exercise.
+  const lastAt = Math.max(0, ...sets.filter((x) => x.exerciseId === exerciseId).map((x) => x.at));
+  const set: WorkSet = { id: uid(), sessionId, exerciseId, at: Math.max(now, lastAt + 1), ...values, isPR: false, updatedAt: now };
   // The same rules as the record keeper (any: rule A; same: per weight / distance, new weight).
   const isPR = prFlags([...sets.filter((x) => x.exerciseId === exerciseId), set], measuresOf, beatOf).get(set.id) ?? false;
   set.isPR = isPR;

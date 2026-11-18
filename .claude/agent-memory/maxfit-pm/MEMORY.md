@@ -21,3 +21,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-18: A new 'lower is better' measure must be checked in every >= comparison (records, challenges, unlock rules). Code review caught the challenge one.
 - 2026-11-18: Supabase legacy anon/service_role keys work only until end of 2026; use sb_publishable_ keys (docs: migrating-to-new-api-keys).
 - 2026-11-18: After changing how records are scored, re-check the edit path and the STORED flags (one-time migration with a version flag), not only the log path.
+- 2026-11-18: Flaky test root cause: two sets in the same millisecond were ordered by random uuid. logSet now gives each set a time after the last one of its exercise.
