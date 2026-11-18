@@ -305,3 +305,4 @@ textarea.input { resize: vertical; min-height: 64px; font-family: inherit; }
 .linkish { background: none; border: 0; padding: 0; text-align: left; color: inherit; min-height: 32px; }
 .fab-space { height: 96px; }
 .reward-skip { background: transparent; color: #e9c99a; min-height: 44px; font-weight: 600; text-decoration: underline; }
+.timer-small { min-height: 44px; padding: 8px 14px; font-weight: 700; }

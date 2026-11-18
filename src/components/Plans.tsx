@@ -31,7 +31,7 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
   const [editing, setEditing] = useState<PlanDraft | null>(null);
   const [importing, setImporting] = useState(false);
   if (!location) return null;
-  const plans = plansAt(game.plans, location.id);
+  const plans = plansAt(game.plans, location.id, game.planUsed);
 
   const open = (p: Plan) => {
     const next = openId === p.id ? null : p.id;
@@ -62,7 +62,7 @@ export function PlansSection({ game, location, onStart, toast }: { game: Game; l
               <b>{p.name}</b>
               {p.description && <span className="small muted clamp1">{p.description}</span>}
               <span className="tiny muted">
-                {p.lastUsedAt ? `Last used ${fmtDay(p.lastUsedAt)}` : 'Not used yet'} · {p.items.length} {p.items.length === 1 ? 'exercise' : 'exercises'}
+                {game.planUsed.get(p.id) ? `Last used ${fmtDay(game.planUsed.get(p.id)!)}` : 'Not used yet'} · {p.items.length} {p.items.length === 1 ? 'exercise' : 'exercises'}
               </span>
             </span>
             <span aria-hidden className="muted">
@@ -129,8 +129,8 @@ function PlanDetail({ game, plan, onStart, onEdit, onDuplicate, onDelete }: { ga
         <h3>{plan.name}</h3>
         {plan.description && <p className="small">{plan.description}</p>}
         <span className="tiny muted">
-          {plan.lastUsedAt ? `Last used ${fmtDay(plan.lastUsedAt, true)}` : 'Not used yet'}
-          {plan.lastViewedAt ? ` · Viewed ${fmtDay(plan.lastViewedAt)}` : ''}
+          {game.planUsed.get(plan.id) ? `Last used ${fmtDay(game.planUsed.get(plan.id)!, true)}` : 'Not used yet'}
+          {game.planViewed.get(plan.id) ? ` · Viewed ${fmtDay(game.planViewed.get(plan.id)!)}` : ''}
         </span>
       </div>
       <ol className="plan-list">
@@ -322,14 +322,17 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
 /** Import: pick a place, then a plan by name. It is copied into `to`. */
 function ImportSheet({ game, to, onClose }: { game: Game; to: Location; onClose: (id?: string, name?: string) => void }) {
   const others = game.locations.filter((l) => l.id !== to.id && plansAt(game.plans, l.id).length > 0);
-  const [from, setFrom] = useState<string | null>(others[0]?.id ?? null);
+  // Plans of a place that was deleted stay importable (code review 2026-11-18).
+  const orphans = game.plans.filter((p) => !game.locations.some((l) => l.id === p.locationId));
+  const GONE = '__deleted_places__';
+  const [from, setFrom] = useState<string | null>(others[0]?.id ?? (orphans.length ? GONE : null));
   const [busy, setBusy] = useState(false);
-  const list = from ? plansAt(game.plans, from) : [];
+  const list = from === GONE ? orphans : from ? plansAt(game.plans, from, game.planUsed) : [];
   return (
     <Sheet onClose={() => onClose()}>
       <h2>Import a plan into {to.name}</h2>
       <p className="small muted">It is copied. Changing the copy never changes the original.</p>
-      {others.length === 0 ? (
+      {others.length === 0 && orphans.length === 0 ? (
         <p className="muted">No other place has plans yet.</p>
       ) : (
         <>
@@ -340,6 +343,11 @@ function ImportSheet({ game, to, onClose }: { game: Game; to: Location; onClose:
                 {placeIcon(l)} {l.name}
               </button>
             ))}
+            {orphans.length > 0 && (
+              <button role="radio" aria-checked={from === GONE} className={`chip ${from === GONE ? 'on' : ''}`} onClick={() => setFrom(GONE)}>
+                🗑 Deleted places
+              </button>
+            )}
           </div>
           <span className="tiny muted">2. Which plan?</span>
           {list.map((p) => {

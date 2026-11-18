@@ -26,3 +26,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-18: SVG: never mix a transform attribute with CSS transform-box/scale on the same element; wrap in a <g> for placement.
 - 2026-11-18: A new sync table must not break sync before the server migration: skip on check violation (23514) with its own push mark.
 - 2026-11-18: Splitting work by FILE OWNERSHIP let frontend-dev build items 6-8 in parallel with zero merge conflicts.
+- 2026-11-18: In LWW sync, never bump updatedAt for view/use stamps; keep them per device or derive them (code review found plan views overwrote edits).

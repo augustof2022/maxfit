@@ -202,7 +202,8 @@ export async function startSession(locationId: string | null, planId: string | n
     const usePlan = plan && !plan.deleted ? plan.id : null;
     const s: Session = { id: uid(), startedAt: now, endedAt: null, locationId, status: 'active', activeSec: 0, restSec: 0, xpEarned: 0, prs: 0, live: newLive(now), planId: usePlan, updatedAt: now };
     await db.sessions.put(s);
-    if (usePlan) await db.plans.update(usePlan, { lastUsedAt: now, updatedAt: now });
+    // "Last used" is worked out from sessions (planLastUsed); the plan row is not touched, so an edit
+    // made on another device is never overwritten by simply using the plan.
     await updateProfile({ lastLocationId: locationId });
     return s;
   });
@@ -261,9 +262,9 @@ export async function importPlan(id: string, toLocationId: string): Promise<stri
   return copyInto(id, toLocationId);
 }
 
-/** Remember when a plan was last opened ("last viewed"). */
+/** Remember when a plan was last opened ("last viewed"), on this device only (never touches the synced row). */
 export async function markPlanViewed(id: string): Promise<void> {
-  await db.plans.update(id, { lastViewedAt: Date.now(), updatedAt: Date.now() });
+  await db.meta.put({ key: `planViewed:${id}`, value: Date.now() });
 }
 
 /** Add one exercise to the end of a plan (e.g. right after it unlocks). No-op if it is already there. */
@@ -281,6 +282,19 @@ export async function setMode(sessionId: string, mode: LiveMode): Promise<void> 
   const s = await db.sessions.get(sessionId);
   if (!s?.live || s.live.mode === mode) return;
   await db.sessions.update(sessionId, { live: switchMode(s.live, mode, Date.now()), updatedAt: Date.now() });
+}
+
+/**
+ * Start a fresh rest now. Logging a set while the rest clock still runs (he did the set without tapping
+ * Start set) must restart the rest, or "rest is over" fires during the next set (code review 2026-11-18).
+ * The time since the last switch is banked as rest (we cannot know when the set began).
+ */
+export async function restartRest(sessionId: string): Promise<void> {
+  const s = await db.sessions.get(sessionId);
+  if (!s?.live) return;
+  const now = Date.now();
+  const live = s.live.mode === 'rest' ? switchMode(switchMode(s.live, 'exercise', now), 'rest', now) : switchMode(s.live, 'rest', now);
+  await db.sessions.update(sessionId, { live, updatedAt: now });
 }
 
 export async function startCardio(sessionId: string, exerciseId: string): Promise<void> {
@@ -646,6 +660,8 @@ export function validateBackup(data: any): string | null {
  */
 export async function importAll(json: string): Promise<void> {
   const data = JSON.parse(json);
+  // A backup from before plans existed says nothing about plans: keep the plans on this phone.
+  const hasPlans = Array.isArray(data?.plans);
   const err = validateBackup(data);
   if (err) throw new Error(err);
   const now = Date.now();
@@ -654,7 +670,7 @@ export async function importAll(json: string): Promise<void> {
       const table = db[t] as any;
       const keep = new Set<string>(data[t].map((r: any) => r.id));
       const current = (await table.toArray()) as { id: string; deleted?: boolean }[];
-      const gone = current.filter((r) => !keep.has(r.id) && !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now }));
+      const gone = t === 'plans' && !hasPlans ? [] : current.filter((r) => !keep.has(r.id) && !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now }));
       await table.bulkPut([...data[t].map((r: any) => ({ ...r, updatedAt: now })), ...gone]);
     }
   });

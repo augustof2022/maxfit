@@ -25,6 +25,23 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-2-4-2 1-2-1V5h-4v2l-2 1-2-1-2 4 2 1v0l-2 1 2 4 2-1 2 1v2h4v-2l2-1 2 1 2-4z' },
 ];
 
+/** Reward cards already shown in a session, kept for this tab (survives a reload). */
+function loadShown(sessionId: string): string[] {
+  try {
+    return JSON.parse(sessionStorage.getItem(`shown:${sessionId}`) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+function saveShown(sessionId: string | null, shown: Set<string>) {
+  if (!sessionId) return;
+  try {
+    sessionStorage.setItem(`shown:${sessionId}`, JSON.stringify([...shown]));
+  } catch {
+    /* storage off: only a repeat card at worst */
+  }
+}
+
 export default function App() {
   const game = useGame();
   const [tab, setTab] = useState<Tab>(() => (location.hash.slice(1) as Tab) || 'home');
@@ -81,9 +98,10 @@ export default function App() {
     st.gear = new Set(d.gear);
     if (!d.active) return;
     if (st.session !== d.active.id) {
-      // A new session: start counting from what is unlocked now.
+      // A new session (or the app reloaded mid-session): start counting from what is unlocked now, and
+      // remember what this session already showed, so a reload never shows a card twice.
       st.session = d.active.id;
-      st.shown = new Set();
+      st.shown = new Set(loadShown(d.active.id));
       return;
     }
     if (!prevU || !prevG) return;
@@ -92,7 +110,10 @@ export default function App() {
       ...d.gear.filter((g) => !prevG.has(g)).map((gearId): Reward => ({ kind: 'gear', gearId })),
     ].filter((r) => !st.shown.has(rewardKey(r)));
     out.forEach((r) => st.shown.add(rewardKey(r)));
-    if (out.length) celebrate(out);
+    if (out.length) {
+      saveShown(st.session, st.shown);
+      celebrate(out);
+    }
   }, [d]);
 
   const onFinished = (s: SessionSummary) => {

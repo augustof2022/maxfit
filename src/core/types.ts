@@ -242,6 +242,7 @@ export interface Plan {
   locationId: string;
   items: PlanItem[];
   createdAt: number;
+  /** Not used any more (kept for rows already saved): last used comes from sessions, last viewed is per device. */
   lastUsedAt: number | null;
   lastViewedAt: number | null;
   updatedAt: number;

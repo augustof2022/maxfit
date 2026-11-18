@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../data/db';
 import { Stepper } from '../components/ui';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { CATEGORIES, EQUIPMENT, equipmentName, knownEquipment } from '../core/equipment';
@@ -306,6 +308,8 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
   const [user, setUser] = useState<string | null>(null);
   const [last, setLast] = useState<SyncResult | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set by sync when the cloud does not accept plans yet (migration not applied).
+  const plansBlocked = useLiveQuery(() => db.meta.get('syncBlocked:plans'), [])?.value === true;
 
   useEffect(() => {
     void currentUser().then((u) => setUser(u?.email ?? null));
@@ -341,6 +345,7 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
         <>
           <p className="small">Signed in as {user}</p>
           <p className="small muted">{last ? `Last sync ${new Date(last.at).toLocaleString()} · sent ${last.pushed}, got ${last.pulled}` : 'Not synced yet.'}</p>
+          {plansBlocked && <p className="small banner">Exercise plans are on this phone only until the cloud is updated (everything else syncs). Export a backup to keep them safe.</p>}
           <div className="row">
             <button className="btn primary grow" disabled={busy} onClick={() => run(syncNow, 'Synced')}>
               Sync now

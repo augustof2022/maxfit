@@ -73,7 +73,18 @@ export function fmtPlanItem(it: PlanItem, ms: Measure[]): string {
   return hasTarget(it.target) ? `${sets} × ${fmtValues(ms, it.target)}` : sets;
 }
 
+/**
+ * When each plan was last used, worked out from the sessions started from it (not stored on the plan:
+ * a "touch" on a last-write-wins row would overwrite an edit made on another device — code review 2026-11-18).
+ */
+export function planLastUsed(sessions: { planId?: string | null; startedAt: number; deleted?: boolean }[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const s of sessions) if (s.planId && !s.deleted && (out.get(s.planId) ?? 0) < s.startedAt) out.set(s.planId, s.startedAt);
+  return out;
+}
+
 /** Plans of one place, last used (or made) first. */
-export function plansAt(plans: Plan[], locationId: string | null): Plan[] {
-  return plans.filter((p) => !p.deleted && p.locationId === locationId).sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt));
+export function plansAt(plans: Plan[], locationId: string | null, lastUsed: Map<string, number> = new Map()): Plan[] {
+  const key = (p: Plan) => lastUsed.get(p.id) ?? p.createdAt;
+  return plans.filter((p) => !p.deleted && p.locationId === locationId).sort((a, b) => key(b) - key(a));
 }

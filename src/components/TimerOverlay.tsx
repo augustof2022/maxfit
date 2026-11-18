@@ -41,6 +41,7 @@ export function TimerOverlay({
   const goRef = useRef(onGo);
   goRef.current = onGo;
   const stopRef = useRef<HTMLButtonElement>(null);
+  const [asking, setAsking] = useState(false);
 
   // Countdown: one step a second, a short beep on 3-2-1 and a high one on GO.
   useEffect(() => {
@@ -78,9 +79,21 @@ export function TimerOverlay({
     <div className="timer-full" role="dialog" aria-modal="true" aria-label={`${name} timer`}>
       <div className="row between timer-top">
         <span className="tiny">{name}</span>
-        <button className="btn ghost icon-btn" onClick={onCancel}>
-          ✕ Cancel
-        </button>
+        {asking ? (
+          <div className="row" role="group" aria-label="Cancel the timer?">
+            <button className="btn ghost timer-small" onClick={() => setAsking(false)}>
+              Keep timing
+            </button>
+            <button className="btn danger timer-small" onClick={onCancel}>
+              Throw away
+            </button>
+          </div>
+        ) : (
+          // Before GO, cancel at once; after GO, ask first (the time would be lost).
+          <button className="btn ghost timer-small" onClick={() => (startAt === null ? onCancel() : setAsking(true))}>
+            ✕ Cancel
+          </button>
+        )}
       </div>
       {startAt === null ? (
         <div className="timer-count" aria-live="assertive">

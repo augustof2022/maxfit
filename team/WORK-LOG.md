@@ -63,3 +63,9 @@
   transform-box; fixed); 13+ cards in a row after catch-up (added "Skip the rest"); long equipment text pushed plans down (shortened).
 - Checks: typecheck clean; 101 unit tests (16 new); e2e 47/47 (16 new checks); balance steady L15/57, casual L10/35, home L15/56 (no rule change).
 - Open: Q28 apply the plans migration to Supabase; Q29 per-plan "how to beat"; Q30 time format.
+- Review (code-reviewer, high): changes requested → all fixed: (1) viewing/starting a plan no longer bumps the synced row
+  (last used = from sessions; last viewed = this device only); (2) a Log during rest restarts the rest clock + alarm unless
+  the timer's Stop started it (restartRest); (3) Settings says when plans are phone-only until the cloud update; (4) a backup
+  from before plans keeps today's plans; (5) plans of a deleted place stay importable; (6) timer Cancel after GO asks first,
+  44 px; (7) reward cards remembered per session across a reload; (8) an old photo gets its own day's "I did" lines; (9) BMI rAF.
+- Checks after fixes: 103 unit tests, e2e 47/47.

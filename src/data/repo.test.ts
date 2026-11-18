@@ -231,7 +231,9 @@ describe('edit and delete (Renz, 2026-11-18)', () => {
   });
 });
 
-import { addToPlan, deletePlan, duplicatePlan, importPlan, savePlan } from './repo';
+import { addToPlan, deletePlan, duplicatePlan, importPlan, markPlanViewed, restartRest, savePlan } from './repo';
+import { planLastUsed } from '../core/plans';
+import { inMode } from '../core/live';
 import Dexie from 'dexie';
 import { MaxFitDB } from './db';
 
@@ -263,9 +265,15 @@ describe('exercise plans', () => {
 
   it('starting from a plan links the session and sets "last used"; add-to-plan adds once', async () => {
     const id = await savePlan(draft);
+    const before = (await db.plans.get(id))!.updatedAt;
+    await new Promise((r) => setTimeout(r, 5));
     const s = await startSession('home', id);
     expect(s.planId).toBe(id);
-    expect((await db.plans.get(id))!.lastUsedAt).toBeGreaterThan(0);
+    expect(planLastUsed(await db.sessions.toArray()).get(id)).toBe(s.startedAt);
+    // Using or viewing a plan never touches its synced row (an edit on another device must win).
+    await markPlanViewed(id);
+    expect((await db.plans.get(id))!.updatedAt).toBe(before);
+    expect((await db.meta.get(`planViewed:${id}`))?.value).toBeGreaterThan(0);
     expect(await addToPlan(id, 'jumping_jack')).toBe(true);
     expect(await addToPlan(id, 'jumping_jack')).toBe(false);
     expect((await db.plans.get(id))!.items.map((i) => i.exerciseId)).toEqual(['push_up', 'run_in_place', 'jumping_jack']);
@@ -276,7 +284,7 @@ describe('exercise plans', () => {
     await expect(savePlan({ ...draft, items: [] })).rejects.toThrow(/at least one/);
   });
 
-  it('plans are in backups and come back on restore; old backups without plans still load', async () => {
+  it('plans are in backups and come back on restore; an old backup without plans keeps them', async () => {
     const id = await savePlan(draft);
     const json = await exportAll();
     await deletePlan(id);
@@ -285,7 +293,7 @@ describe('exercise plans', () => {
     const old = JSON.parse(json);
     delete old.plans;
     await importAll(JSON.stringify(old));
-    expect((await db.plans.get(id))!.deleted).toBe(true); // not in that backup = removed, as for other rows
+    expect((await db.plans.get(id))!.deleted).toBeUndefined(); // a backup from before plans keeps today's plans
   });
 });
 
@@ -306,5 +314,23 @@ describe('database upgrade v3 → v4 (plans)', () => {
     expect((await upgraded.meta.get('lastPush'))?.value).toBe(9);
     expect(await upgraded.plans.count()).toBe(0);
     upgraded.close();
+  });
+});
+
+describe('auto rest', () => {
+  it('a Log while the rest clock runs starts a fresh rest; the earlier rest stays counted', async () => {
+    const s = await startSession('home');
+    await setMode(s.id, 'rest');
+    await db.sessions.update(s.id, { live: { ...(await db.sessions.get(s.id))!.live!, modeStartedAt: Date.now() - 80_000 } });
+    await restartRest(s.id);
+    const live = (await db.sessions.get(s.id))!.live!;
+    expect(live.mode).toBe('rest');
+    expect(inMode(live, Date.now())).toBeLessThan(2);
+    expect(live.banked.rest).toBeGreaterThanOrEqual(79);
+  });
+  it('from working, restartRest just switches to rest', async () => {
+    const s = await startSession('home');
+    await restartRest(s.id);
+    expect((await db.sessions.get(s.id))!.live!.mode).toBe('rest');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTarget, copyName, copyPlan, moveItem, planError, plansAt } from './plans';
+import { cleanTarget, copyName, copyPlan, moveItem, planError, planLastUsed, plansAt } from './plans';
 import type { Plan } from './types';
 
 const plan = (o: Partial<Plan> = {}): Plan => ({
@@ -52,7 +52,9 @@ describe('plans', () => {
 
   it('keeps only targets above 0; lists plans of one place, last used first, no deleted', () => {
     expect(cleanTarget({ reps: 0, seconds: 30, weightKg: undefined })).toEqual({ seconds: 30 });
-    const list = [plan({ id: 'a', lastUsedAt: 10 }), plan({ id: 'b', lastUsedAt: 20 }), plan({ id: 'c', deleted: true }), plan({ id: 'd', locationId: 'gym' })];
-    expect(plansAt(list, 'home').map((p) => p.id)).toEqual(['b', 'a']);
+    const list = [plan({ id: 'a' }), plan({ id: 'b' }), plan({ id: 'c', deleted: true }), plan({ id: 'd', locationId: 'gym' })];
+    const used = planLastUsed([{ planId: 'a', startedAt: 10 }, { planId: 'b', startedAt: 20 }, { planId: 'a', startedAt: 99, deleted: true }]);
+    expect(used.get('a')).toBe(10);
+    expect(plansAt(list, 'home', used).map((p) => p.id)).toEqual(['b', 'a']);
   });
 });

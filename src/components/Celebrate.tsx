@@ -108,7 +108,7 @@ function RewardCard({ game, r, total }: { game: Game; r: Reward; total: number }
 
   // The plan to add a new exercise to: the running session's plan, else the last used plan here.
   const activePlan = d.active?.planId ? game.plans.find((x) => x.id === d.active!.planId) : undefined;
-  const plan = activePlan ?? plansAt(game.plans, d.location?.id ?? null)[0];
+  const plan = activePlan ?? plansAt(game.plans, d.location?.id ?? null, game.planUsed)[0];
   const planLoc = plan ? game.locations.find((l) => l.id === plan.locationId) : undefined;
 
   let kicker = '';

@@ -170,8 +170,12 @@ function BmiScale({ value }: { value: number }) {
       setShown(value);
       return;
     }
-    const r = requestAnimationFrame(() => requestAnimationFrame(() => setShown(value)));
-    return () => cancelAnimationFrame(r);
+    let inner = 0;
+    const r = requestAnimationFrame(() => (inner = requestAnimationFrame(() => setShown(value))));
+    return () => {
+      cancelAnimationFrame(r);
+      cancelAnimationFrame(inner);
+    };
   }, [value]);
   return (
     <div className="bmi-scale" aria-hidden>

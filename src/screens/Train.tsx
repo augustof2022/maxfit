@@ -12,7 +12,7 @@ import { TimerOverlay } from '../components/TimerOverlay';
 import { ExerciseDemo } from '../components/ExerciseDemo';
 import { fmtLevel, fmtValues, iconFor, isCardioFlow, levelOf } from '../core/measures';
 import type { Beat, Exercise, Goal, LiveMode, Measure, PlanItem, Session, Settings, WorkSet } from '../core/types';
-import { cancelCardio, discardSession, finishCardio, finishSession, logSet, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
+import { cancelCardio, discardSession, finishCardio, finishSession, logSet, restartRest, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
 import { confirmAsk } from '../components/Confirm';
 import { EditSetSheet, MeasureInputs, MeasureSheet, trackLabel } from '../components/SetEditors';
 import type { Game } from '../data/useGame';
@@ -180,15 +180,26 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   }, [over, now, p.settings]);
 
   // Auto work / rest (Renz, 2026-11-18): Start set / the timer = working; Stop / Log = resting.
-  // Already resting (the timer's Stop started the rest): Log does not restart the rest clock or its alarm.
-  const goRest = async () => {
+  // The timer's Stop starts the rest; the Log right after it keeps that rest. Any other Log while the rest
+  // clock runs (a set done without Start set) starts a fresh rest and re-arms the alarm.
+  const restFromTimer = useRef(false);
+  const goRest = async (fromTimer = false) => {
     primeAudio();
-    if (session.live?.mode === 'rest') return;
-    await setMode(session.id, 'rest');
+    if (fromTimer) {
+      restFromTimer.current = true;
+      await setMode(session.id, 'rest');
+    } else if (session.live?.mode === 'rest' && restFromTimer.current) {
+      restFromTimer.current = false;
+      return;
+    } else {
+      restFromTimer.current = false;
+      await restartRest(session.id);
+    }
     void scheduleRestAlarm(limit);
   };
   const goWork = async () => {
     primeAudio();
+    restFromTimer.current = false;
     await setMode(session.id, 'exercise');
     void cancelRestAlarm();
   };
@@ -233,7 +244,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
         onToggle={() => setOpen(open === e.id ? null : e.id)}
         onHistory={() => setHist(e)}
         onWork={goWork}
-        onRest={goRest}
+        onRest={() => goRest(true)}
         session={session}
         onLogged={onLogged}
       />
@@ -280,7 +291,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
         <div className="mode-card work stack">
           <span className="tiny">Working</span>
           <p className="small muted">Log a set below. The rest timer starts by itself.</p>
-          <button className="btn rest big" onClick={goRest}>
+          <button className="btn rest big" onClick={() => void goRest()}>
             Start rest
           </button>
         </div>

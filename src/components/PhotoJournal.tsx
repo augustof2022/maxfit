@@ -29,9 +29,11 @@ function refDay(game: Game) {
 }
 
 /** "I did" lines for the photo, e.g. "Push-ups · 25 reps": every exercise that day, or only the records. */
-function didOptions(game: Game): Record<'all' | 'records', string[]> {
+function didOptions(game: Game, photoAt?: number): Record<'all' | 'records', string[]> {
   const d = game.d!;
-  const { sets } = refDay(game);
+  // An older photo gets the lines of its own day, never today's (code review 2026-11-18).
+  const day = photoAt !== undefined ? dayKey(photoAt) : null;
+  const sets = day && day !== dayKey(Date.now()) ? d.liveSets.filter((x) => dayKey(x.at) === day) : refDay(game).sets;
   const make = (mode: 'all' | 'records') => didLines(sets, mode, d.measuresOf, d.beatOf).map((l) => `${l.name} · ${l.value}`);
   return { all: make('all'), records: make('records') };
 }
@@ -140,7 +142,7 @@ function Thumb({ photo, onClick }: { photo: Photo; onClick: () => void }) {
 
 function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; photo?: Photo; onClose: () => void }) {
   const options = useMemo(() => statOptions(game), [game]);
-  const fresh = useMemo(() => didOptions(game), [game]);
+  const fresh = useMemo(() => didOptions(game, photo?.at), [game, photo?.at]);
   // An old photo keeps the "I did" lines it was saved with (they were true that day).
   const kept = photo?.did;
   const [didMode, setDidMode] = useState<'all' | 'records'>(kept?.mode ?? 'all');
