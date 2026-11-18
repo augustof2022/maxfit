@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { EquipmentItem, Location, Photo, Profile, Session, WeightEntry, WorkSet } from '../core/types';
+import type { EquipmentItem, Location, Photo, Plan, Profile, Session, WeightEntry, WorkSet } from '../core/types';
 
 // Local-first database (IndexedDB in the browser and in the Android app).
 // Every row carries updatedAt so cloud sync can merge with last-write-wins.
@@ -19,6 +19,8 @@ export class MaxFitDB extends Dexie {
   meta!: Table<Meta, string>;
   /** Progress photos: on this phone only, never synced (not in SYNC_TABLES). */
   photos!: Table<Photo, string>;
+  /** Exercise plans per place (synced). */
+  plans!: Table<Plan, string>;
 
   constructor(name = 'maxfit') {
     super(name);
@@ -38,12 +40,17 @@ export class MaxFitDB extends Dexie {
       .upgrade((tx) => tx.table('meta').bulkDelete(['pullSeq', 'pullTime']));
     // v3: progress photos (phone only, Renz 2026-11-18).
     this.version(3).stores({ photos: 'id, at' });
+    // v4: exercise plans per place (Renz, 2026-11-18). New sync table, so the pull cursor is reset
+    // (rows of it that an older app skipped are pulled again; merging is last-write-wins, so it is safe).
+    this.version(4)
+      .stores({ plans: 'id, locationId, updatedAt' })
+      .upgrade((tx) => tx.table('meta').bulkDelete(['pullSeq', 'pullTime']));
   }
 }
 
 export const db = new MaxFitDB();
 
-export const SYNC_TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights', 'equipment'] as const;
+export const SYNC_TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights', 'equipment', 'plans'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 
 export function uid(): string {

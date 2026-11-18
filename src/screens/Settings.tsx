@@ -38,6 +38,14 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
           Name (shown on Home)
           <input className="input" value={p.name} onChange={(e) => updateProfile({ name: e.target.value })} />
         </label>
+        <span className="tiny muted">Gender (sets your avatar's body)</span>
+        <div className="seg" role="radiogroup" aria-label="Gender">
+          {(['male', 'female'] as const).map((g) => (
+            <button key={g} role="radio" aria-checked={(p.gender ?? 'male') === g} className={`chip ${(p.gender ?? 'male') === g ? 'on' : ''}`} onClick={() => updateProfile({ gender: g })}>
+              {g === 'male' ? 'Male' : 'Female'}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="card stack" aria-label="Goals">
@@ -47,11 +55,11 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
       <section className="card stack" aria-label="Avatar style">
         <h2>Avatar style</h2>
-        <p className="small muted">Three looks. Same moves: it trains when you train.</p>
+        <p className="small muted">Three looks. It trains when you train.</p>
         <div className="seg" role="radiogroup" aria-label="Avatar style">
           {AVATAR_STYLES.map((st) => (
             <button key={st.id} role="radio" aria-checked={(p.avatarStyle ?? 'athlete') === st.id} className={`card flat stack style-pick ${(p.avatarStyle ?? 'athlete') === st.id ? 'on' : ''}`} onClick={() => updateProfile({ avatarStyle: st.id })}>
-              <Avatar stage={d.stage} gear={d.gear} color={color} size={86} style={st.id} action="demo" />
+              <Avatar stage={d.stage} gear={d.gear} color={color} size={86} style={st.id} gender={p.gender} action="demo" />
               <b className="small">{st.name}</b>
               <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 {st.blurb}
@@ -245,7 +253,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
       <section className="card stack" aria-label="Delete test data">
         <h2>Delete my test data</h2>
-        <p className="small muted">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter moves). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
+        <p className="small muted">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter exercises). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
         <button
           className="btn danger"
           onClick={async () => {

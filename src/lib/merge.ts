@@ -38,3 +38,13 @@ export function mergeRow(tbl: string, local: Row | undefined, remote: Row, now =
   const updatedAt = winner === remote && remoteHasAll ? remote.updatedAt : Math.max(now, local.updatedAt, remote.updatedAt);
   return revealed === undefined ? { ...winner, unlocked, cosmetics, updatedAt } : { ...winner, unlocked, cosmetics, revealed, updatedAt };
 }
+
+/**
+ * True when the server refused a row because its table is not in the allowed list yet
+ * (the migration that adds it has not been applied). Postgres check_violation = 23514.
+ * Sync then keeps that table on the phone and tries again next time, instead of failing everything.
+ */
+export function isTableNotAllowed(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === '23514' || /maxfit_rows_tbl_check/.test(error.message ?? '');
+}

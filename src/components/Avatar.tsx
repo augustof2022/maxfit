@@ -2,10 +2,13 @@
 // runs in place, walks, does jumping jacks, squats, presses, pulls and celebrates.
 // Three looks share the same joints (Renz picked "propose 3", 2026-11-18): athlete, line, buddy.
 // It grows with the level stage (0-6) and wears gear earned by unlocks.
+// Female (Profile.gender, 2026-11-18): same joints, gear and motion; narrower shoulders, a defined
+// waist, slightly wider hips and shoulder-length hair.
 // Motion is CSS (see .av-* in styles.css): calm loops, eased; off when the phone asks for reduced motion.
 
+import '../styles-extra.css';
 import { useEffect, useId, useState, type CSSProperties } from 'react';
-import type { AvatarStyle } from '../core/types';
+import type { AvatarStyle, Gender } from '../core/types';
 
 export type AvatarAction = 'idle' | 'walk' | 'run' | 'jump' | 'squat' | 'press' | 'pull' | 'celebrate' | 'still' | 'life' | 'demo';
 
@@ -49,9 +52,10 @@ interface Props {
   silhouette?: boolean;
   style?: AvatarStyle;
   action?: AvatarAction;
+  gender?: Gender;
 }
 
-export function Avatar({ stage, gear, color, size = 120, silhouette = false, style = 'athlete', action = 'idle' }: Props) {
+export function Avatar({ stage, gear, color, size = 120, silhouette = false, style = 'athlete', action = 'idle', gender = 'male' }: Props) {
   const uid = useId().replace(/:/g, '');
   const act = useCycle(silhouette ? 'still' : action);
   const s = Math.max(0, Math.min(6, stage));
@@ -59,11 +63,14 @@ export function Avatar({ stage, gear, color, size = 120, silhouette = false, sty
   const line = style === 'line';
 
   // Body grows with the stage.
-  const sw = 12 + s * 1.7; // half shoulder width
-  const waist = 8.5 + s * 0.7;
-  const hipW = 4.5 + s * 0.4;
-  const armW = (buddy ? 7 : 5.5) + s * 0.6;
-  const legW = (buddy ? 8.5 : 7) + s * 0.6;
+  const fem = gender === 'female';
+  const sw = fem ? 10.5 + s * 1.25 : 12 + s * 1.7; // half shoulder width
+  const waist = 8.5 + s * 0.7; // male: width at the hips
+  const fWaist = 6.6 + s * 0.45; // female: narrowest point
+  const fHip = 9.6 + s * 0.6; // female: hip width
+  const hipW = fem ? 5.2 + s * 0.45 : 4.5 + s * 0.4;
+  const armW = (buddy ? 7 : 5.5) + s * (fem ? 0.4 : 0.6) - (fem ? 0.6 : 0);
+  const legW = (buddy ? 8.5 : 7) + s * 0.6 - (fem ? 0.3 : 0);
   const headR = buddy ? 15 : 9.5;
   const headY = buddy ? 25 : 31;
   const neckY = 44;
@@ -84,6 +91,21 @@ export function Avatar({ stage, gear, color, size = 120, silhouette = false, sty
   const L = line && !silhouette;
   const stroke = (c: string, w: number) => (L ? { stroke: color, strokeWidth: 3, fill: 'none' } : { stroke: c, strokeWidth: w, fill: 'none' });
   const fill = (c: string) => (L ? { fill: 'none', stroke: color, strokeWidth: 2.6 } : { fill: c });
+
+  // Torso outline. Male: a taper from shoulders to hips. Female: shoulders in to a waist, out to the hips.
+  const wY = neckY + 15;
+  const torso = fem
+    ? `M${60 - sw} ${neckY + 3} Q60 ${neckY - 2} ${60 + sw} ${neckY + 3} Q${60 + sw - 0.5} ${wY - 7} ${60 + fWaist} ${wY} Q${60 + fWaist - 0.5} ${hipY - 7} ${60 + fHip} ${hipY + 1} Q60 ${hipY + 4} ${60 - fHip} ${hipY + 1} Q${60 - fWaist + 0.5} ${hipY - 7} ${60 - fWaist} ${wY} Q${60 - sw + 0.5} ${wY - 7} ${60 - sw} ${neckY + 3} Z`
+    : `M${60 - sw} ${neckY + 3} Q60 ${neckY - 2} ${60 + sw} ${neckY + 3} L${60 + waist} ${hipY + 1} Q60 ${hipY + 4} ${60 - waist} ${hipY + 1} Z`;
+  // Buddy female: a soft pear shape (narrower top, fuller bottom).
+  const bt = neckY - 1;
+  const bb = hipY + 5;
+  const bm = (bt + bb) / 2 + 3;
+  const buddyFem = `M60 ${bt} C${60 + sw + 1} ${bt} ${60 + sw - 1} ${bm - 8} ${60 + sw + 3} ${bm + 2} C${60 + sw + 5} ${bb - 1} ${60 + 6} ${bb} 60 ${bb} C${60 - 6} ${bb} ${60 - sw - 5} ${bb - 1} ${60 - sw - 3} ${bm + 2} C${60 - sw + 1} ${bm - 8} ${60 - sw - 1} ${bt} 60 ${bt} Z`;
+  // Female hair: shoulder-length, behind the head (drawn first so the face sits on top).
+  const hr = headR + 1.6;
+  const hb = headY + headR + (buddy ? 1 : 3.5);
+  const backHair = `M${60 - hr + 0.4} ${hb} Q${60 - hr - 1.2} ${headY} ${60 - hr} ${headY - 2} A${hr} ${hr} 0 0 1 ${60 + hr} ${headY - 2} Q${60 + hr + 1.2} ${headY} ${60 + hr - 0.4} ${hb}`;
 
   const j = (x: number, y: number, d = 1): CSSProperties => ({ transformOrigin: `${x}px ${y}px`, ['--d' as string]: d });
 
@@ -155,23 +177,25 @@ export function Avatar({ stage, gear, color, size = 120, silhouette = false, sty
 
         <g className="j-torso" style={j(60, hipY)}>
           {buddy ? (
-            <ellipse cx="60" cy={(neckY + hipY) / 2 + 2} rx={sw + 1} ry={(hipY - neckY) / 2 + 3} {...fill(suit)} />
+            fem ? <path d={buddyFem} {...fill(suit)} /> : <ellipse cx="60" cy={(neckY + hipY) / 2 + 2} rx={sw + 1} ry={(hipY - neckY) / 2 + 3} {...fill(suit)} />
           ) : (
-            <path d={`M${60 - sw} ${neckY + 3} Q60 ${neckY - 2} ${60 + sw} ${neckY + 3} L${60 + waist} ${hipY + 1} Q60 ${hipY + 4} ${60 - waist} ${hipY + 1} Z`} {...fill(suit)} strokeLinejoin="round" />
+            <path d={torso} {...fill(suit)} strokeLinejoin="round" />
           )}
-          {!L && !silhouette && !buddy && <path d={`M${60 - sw} ${neckY + 3} Q60 ${neckY - 2} ${60 + sw} ${neckY + 3} L${60 + waist} ${hipY + 1} Q60 ${hipY + 4} ${60 - waist} ${hipY + 1} Z`} fill={`url(#shade-${uid})`} />}
+          {!L && !silhouette && !buddy && <path d={torso} fill={`url(#shade-${uid})`} />}
           {!L && !silhouette && s >= 2 && !buddy && <path d={`M60 ${neckY + 6} L60 ${hipY - 4}`} stroke="#000" strokeOpacity=".18" strokeWidth="1.2" />}
           {L && <line x1="60" y1={neckY} x2="60" y2={hipY} stroke={color} strokeWidth="1.4" opacity=".5" />}
-          {has('belt') && <rect x={60 - waist - 1} y={hipY - 5} width={(waist + 1) * 2} height="5" rx="1.5" fill={L ? 'none' : '#3b2a1a'} stroke={gold} strokeWidth={L ? 1.6 : 1} />}
+          {has('belt') && <rect x={60 - (fem ? fHip - 1.5 : waist) - 1} y={hipY - 5} width={((fem ? fHip - 1.5 : waist) + 1) * 2} height="5" rx="1.5" fill={L ? 'none' : '#3b2a1a'} stroke={gold} strokeWidth={L ? 1.6 : 1} />}
         </g>
 
         {arm('l')}
         {arm('r')}
 
         <g className="j-head" style={j(60, neckY)}>
-          {!buddy && <line x1="60" y1={neckY + 2} x2="60" y2={headY + headR - 2} {...stroke(L ? color : skin, 5)} strokeLinecap="round" />}
+          {fem && (L ? <path d={backHair} fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" opacity={0.85} /> : <path d={`${backHair} Q60 ${hb + 2.5} ${60 - hr + 0.4} ${hb} Z`} fill={hair} />)}
+          {!buddy && <line x1="60" y1={neckY + 2} x2="60" y2={headY + headR - 2} {...stroke(L ? color : skin, fem ? 4.2 : 5)} strokeLinecap="round" />}
           <circle cx="60" cy={headY} r={headR} {...fill(skin)} />
-          {!L && !silhouette && <path d={`M${60 - headR} ${headY - 1} Q${60 - headR + 1} ${headY - headR - 3} 60 ${headY - headR - 1} Q${60 + headR - 1} ${headY - headR - 3} ${60 + headR} ${headY - 1} Q60 ${headY - headR + 4} ${60 - headR} ${headY - 1} Z`} fill={hair} />}
+          {!L && !silhouette && !fem && <path d={`M${60 - headR} ${headY - 1} Q${60 - headR + 1} ${headY - headR - 3} 60 ${headY - headR - 1} Q${60 + headR - 1} ${headY - headR - 3} ${60 + headR} ${headY - 1} Q60 ${headY - headR + 4} ${60 - headR} ${headY - 1} Z`} fill={hair} />}
+          {!L && !silhouette && fem && <path d={`M${60 - headR - 0.6} ${headY + 2} Q${60 - headR} ${headY - headR - 2} 60 ${headY - headR - 1.2} Q${60 + headR} ${headY - headR - 2} ${60 + headR + 0.6} ${headY + 2} Q${60 + headR * 0.55} ${headY - headR * 0.55} ${60 - headR * 0.15} ${headY - headR * 0.42} Q${60 - headR * 0.7} ${headY - headR * 0.3} ${60 - headR - 0.6} ${headY + 2} Z`} fill={hair} />}
           {!silhouette && (
             <g className="j-eyes" style={j(60, headY + (buddy ? 2 : 1))}>
               <circle cx={60 - headR * 0.38} cy={headY + (buddy ? 2 : 1)} r={buddy ? 2.6 : 1.4} fill={L ? color : dark} />

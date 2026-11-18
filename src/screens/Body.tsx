@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { IconBtn, LineChart, Sheet, Stepper } from '../components/ui';
+import { useEffect, useState } from 'react';
+import '../styles-extra.css';
+import { IconBtn, LineChart, reducedMotion, Sheet, Stepper } from '../components/ui';
 import { confirmAsk } from '../components/Confirm';
 import { PhotoJournal } from '../components/PhotoJournal';
 import { bmi, bmiCategory, dayKey } from '../core/rules';
@@ -161,16 +162,28 @@ function BmiScale({ value }: { value: number }) {
   const lo = 15;
   const hi = 35;
   const pos = (v: number) => `${((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * 100}%`;
+  // Start at the left (15), then slide to the value on the next frame (CSS eases it over ~1 s).
+  // Later changes slide from the old value to the new one. Reduced motion: shown in place.
+  const [shown, setShown] = useState(() => (reducedMotion() ? value : lo));
+  useEffect(() => {
+    if (reducedMotion()) {
+      setShown(value);
+      return;
+    }
+    const r = requestAnimationFrame(() => requestAnimationFrame(() => setShown(value)));
+    return () => cancelAnimationFrame(r);
+  }, [value]);
   return (
-    <div style={{ position: 'relative', height: 26 }} aria-hidden>
-      <div style={{ display: 'flex', height: 8, borderRadius: 99, overflow: 'hidden', marginTop: 4 }}>
+    <div className="bmi-scale" aria-hidden>
+      <div className="bmi-bands">
         <div style={{ width: pos(18.5), background: CAT_COLOR.Underweight }} />
         <div style={{ width: `calc(${pos(25)} - ${pos(18.5)})`, background: CAT_COLOR.Normal }} />
         <div style={{ width: `calc(${pos(30)} - ${pos(25)})`, background: CAT_COLOR.Overweight }} />
         <div style={{ flex: 1, background: CAT_COLOR.Obese }} />
       </div>
-      <div style={{ position: 'absolute', left: pos(value), top: 0, width: 4, height: 16, background: '#fff', borderRadius: 2, transform: 'translateX(-2px)' }} />
-      <div className="tiny muted" style={{ position: 'relative', height: 14, marginTop: 4 }}>
+      <div className="bmi-fill" style={{ width: pos(shown) }} />
+      <div className="bmi-marker" style={{ left: pos(shown) }} />
+      <div className="tiny muted bmi-ticks">
         {[15, 18.5, 25, 30, 35].map((v) => (
           <span key={v} style={{ position: 'absolute', left: pos(v), transform: v === 15 ? 'none' : v === 35 ? 'translateX(-100%)' : 'translateX(-50%)' }}>
             {v}

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { celebrate } from '../components/Celebrate';
+import type { Gender } from '../core/types';
 import { Avatar } from '../components/Avatar';
 import { CountUp, Sheet } from '../components/ui';
 import { EXERCISE_BY_ID } from '../core/exercises';
@@ -7,7 +9,7 @@ import { fmtValues, mainMeasure } from '../core/measures';
 import { AVATAR_STAGES, avatarStage, COLORS, type MeasuresOf } from '../core/rules';
 import type { SessionSummary } from '../data/repo';
 
-export function Summary({ s, onClose, avatarStyle, measuresOf }: { s: SessionSummary; onClose: () => void; avatarStyle?: 'athlete' | 'line' | 'buddy'; measuresOf?: MeasuresOf }) {
+export function Summary({ s, onClose, avatarStyle, gender, measuresOf }: { s: SessionSummary; onClose: () => void; avatarStyle?: 'athlete' | 'line' | 'buddy'; gender?: Gender; measuresOf?: MeasuresOf }) {
   const [chestOpen, setChestOpen] = useState(false);
   const stageBefore = avatarStage(s.levelBefore);
   const stageAfter = avatarStage(s.levelAfter);
@@ -65,7 +67,7 @@ export function Summary({ s, onClose, avatarStyle, measuresOf }: { s: SessionSum
 
       {stageAfter > stageBefore && (
         <div className="card row pop">
-          <Avatar stage={stageAfter} gear={[]} color="#ff7a1a" size={90} style={avatarStyle} action="celebrate" />
+          <Avatar stage={stageAfter} gear={[]} color="#ff7a1a" size={90} style={avatarStyle} gender={gender} action="celebrate" />
           <div>
             <span className="tiny muted">Avatar evolved</span>
             <h2>
@@ -93,7 +95,14 @@ export function Summary({ s, onClose, avatarStyle, measuresOf }: { s: SessionSum
             <span className="chest" aria-hidden>
               🎁
             </span>
-            <button className="btn primary" onClick={() => setChestOpen(true)}>
+            <button
+              className="btn primary"
+              onClick={() => {
+                setChestOpen(true);
+                // A new colour is a grand moment too: show the avatar wearing it.
+                if (s.chest.kind === 'color') celebrate([{ kind: 'color', colorId: s.chest.colorId }]);
+              }}
+            >
               Open mystery chest
             </button>
           </>

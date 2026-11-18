@@ -26,7 +26,8 @@ import {
   type MeasuresOf,
 } from '../core/rules';
 import { beatFor, levelOf, measuresFor } from '../core/measures';
-import type { Beat, EquipmentCategory, EquipmentId, Focus, Goal, LiveMode, Location, Measure, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
+import type { Beat, EquipmentCategory, EquipmentId, Focus, Goal, LiveMode, Location, Measure, Plan, PlanItem, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
+import { cleanTarget, copyName, copyPlan, PLAN_DESC_MAX, PLAN_NAME_MAX, planError } from '../core/plans';
 import { db, uid } from './db';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -191,16 +192,88 @@ export async function activeSession(): Promise<Session | undefined> {
   return (await db.sessions.where('status').equals('active').toArray()).find((s) => !s.deleted);
 }
 
-export async function startSession(locationId: string | null): Promise<Session> {
+export async function startSession(locationId: string | null, planId: string | null = null): Promise<Session> {
   // One transaction: a double tap cannot create two active sessions.
-  return db.transaction('rw', db.sessions, db.profile, async () => {
+  return db.transaction('rw', db.sessions, db.profile, db.plans, async () => {
     const existing = await activeSession();
     if (existing) return existing;
     const now = Date.now();
-    const s: Session = { id: uid(), startedAt: now, endedAt: null, locationId, status: 'active', activeSec: 0, restSec: 0, xpEarned: 0, prs: 0, live: newLive(now), updatedAt: now };
+    const plan = planId ? await db.plans.get(planId) : undefined;
+    const usePlan = plan && !plan.deleted ? plan.id : null;
+    const s: Session = { id: uid(), startedAt: now, endedAt: null, locationId, status: 'active', activeSec: 0, restSec: 0, xpEarned: 0, prs: 0, live: newLive(now), planId: usePlan, updatedAt: now };
     await db.sessions.put(s);
+    if (usePlan) await db.plans.update(usePlan, { lastUsedAt: now, updatedAt: now });
     await updateProfile({ lastLocationId: locationId });
     return s;
+  });
+}
+
+// ---------- exercise plans (per place) ----------
+
+export type PlanDraft = { id?: string; name: string; description: string; locationId: string; items: PlanItem[] };
+
+/** Create or update a plan. Returns its id. */
+export async function savePlan(draft: PlanDraft): Promise<string> {
+  const items = draft.items.map((it) => ({ exerciseId: it.exerciseId, sets: Math.round(it.sets), target: cleanTarget(it.target) }));
+  const clean = { ...draft, name: draft.name.trim().slice(0, PLAN_NAME_MAX), description: draft.description.trim().slice(0, PLAN_DESC_MAX), items };
+  const err = planError(clean);
+  if (err) throw new Error(err);
+  const now = Date.now();
+  return db.transaction('rw', db.plans, async () => {
+    const old = clean.id ? await db.plans.get(clean.id) : undefined;
+    if (clean.id && (!old || old.deleted)) throw new Error('This plan no longer exists.');
+    const id = old?.id ?? uid();
+    const row: Plan = old
+      ? { ...old, name: clean.name, description: clean.description, locationId: clean.locationId, items, updatedAt: now }
+      : { id, name: clean.name, description: clean.description, locationId: clean.locationId, items, createdAt: now, lastUsedAt: null, lastViewedAt: null, updatedAt: now };
+    await db.plans.put(row);
+    return id;
+  });
+}
+
+/** Soft delete (so the delete syncs). Sessions started from it keep their sets. */
+export async function deletePlan(id: string): Promise<void> {
+  await db.plans.update(id, { deleted: true, updatedAt: Date.now() });
+}
+
+async function copyInto(id: string, locationId: string): Promise<string> {
+  return db.transaction('rw', db.plans, async () => {
+    const src = await db.plans.get(id);
+    if (!src || src.deleted) throw new Error('This plan no longer exists.');
+    const taken = (await db.plans.toArray()).filter((p) => !p.deleted && p.locationId === locationId).map((p) => p.name);
+    // Same place: always "(copy)". Another place: keep the name unless that place already has it.
+    const name = src.locationId === locationId || taken.some((t) => t.toLowerCase() === src.name.toLowerCase()) ? copyName(src.name, taken) : src.name;
+    const copy = copyPlan(src, { id: uid(), locationId, name, now: Date.now() });
+    await db.plans.put(copy);
+    return copy.id;
+  });
+}
+
+/** Duplicate a plan in the same place. Returns the new plan's id. */
+export async function duplicatePlan(id: string): Promise<string> {
+  const src = await db.plans.get(id);
+  if (!src) throw new Error('This plan no longer exists.');
+  return copyInto(id, src.locationId);
+}
+
+/** Import (copy) a plan from another place into this one. The original is not touched. */
+export async function importPlan(id: string, toLocationId: string): Promise<string> {
+  return copyInto(id, toLocationId);
+}
+
+/** Remember when a plan was last opened ("last viewed"). */
+export async function markPlanViewed(id: string): Promise<void> {
+  await db.plans.update(id, { lastViewedAt: Date.now(), updatedAt: Date.now() });
+}
+
+/** Add one exercise to the end of a plan (e.g. right after it unlocks). No-op if it is already there. */
+export async function addToPlan(id: string, exerciseId: string, sets = 2): Promise<boolean> {
+  return db.transaction('rw', db.plans, async () => {
+    const p = await db.plans.get(id);
+    if (!p || p.deleted) throw new Error('This plan no longer exists.');
+    if (p.items.some((i) => i.exerciseId === exerciseId)) return false;
+    await db.plans.put({ ...p, items: [...p.items, { exerciseId, sets, target: {} }], updatedAt: Date.now() });
+    return true;
   });
 }
 
@@ -549,16 +622,18 @@ export async function exportAll(): Promise<string> {
     sets: await db.sets.toArray(),
     weights: await db.weights.toArray(),
     equipment: await db.equipment.toArray(),
+    plans: await db.plans.toArray(),
   };
   return JSON.stringify(data);
 }
 
-const TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights', 'equipment'] as const;
+const TABLES = ['profile', 'locations', 'sessions', 'sets', 'weights', 'equipment', 'plans'] as const;
 
 /** Check a backup before touching any data. Returns a readable error, or null if OK. */
 export function validateBackup(data: any): string | null {
   if (!data || data.app !== 'maxfit') return 'This is not a MaxFit backup file.';
   if (data.equipment === undefined) data.equipment = []; // backups made before the equipment library
+  if (data.plans === undefined) data.plans = []; // backups made before exercise plans
   for (const t of TABLES) if (!Array.isArray(data[t])) return `Backup is missing "${t}".`;
   if (data.profile.length !== 1 || data.profile[0]?.id !== 'me') return 'Backup has no valid profile.';
   for (const t of TABLES) if (data[t].some((r: any) => !r || typeof r.id !== 'string')) return `Backup has a broken row in "${t}".`;
@@ -574,7 +649,7 @@ export async function importAll(json: string): Promise<void> {
   const err = validateBackup(data);
   if (err) throw new Error(err);
   const now = Date.now();
-  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment], async () => {
+  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment, db.plans], async () => {
     for (const t of TABLES) {
       const table = db[t] as any;
       const keep = new Set<string>(data[t].map((r: any) => r.id));
@@ -603,8 +678,8 @@ export async function resetTrainingData(): Promise<void> {
 
 /** Erase all MaxFit data on this device (used before another account signs in). */
 export async function wipeLocal(): Promise<void> {
-  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment, db.meta, db.photos], async () => {
-    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear(), db.photos.clear()]);
+  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment, db.meta, db.photos, db.plans], async () => {
+    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear(), db.photos.clear(), db.plans.clear()]);
   });
   await ensureSeed();
 }

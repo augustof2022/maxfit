@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureSeed, migrateRecords, type SessionSummary } from './data/repo';
 import { useGame } from './data/useGame';
 import { Toast } from './components/ui';
 import { ConfirmHost } from './components/Confirm';
 import { UpdateBar } from './components/UpdateBar';
+import { celebrate, CelebrateHost, rewardKey, type Reward } from './components/Celebrate';
+import { avatarStage, gearFor } from './core/rules';
 import { Home } from './screens/Home';
 import { Train } from './screens/Train';
 import { Progress } from './screens/Progress';
@@ -65,7 +67,46 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // Grand unlock moments (Renz, 2026-11-18). Mid-session: anything newly unlocked (a record can unlock
+  // an exercise, and with it new gear) is shown at once. At the end: the rest (streak / session unlocks,
+  // level-ups). Each reward is shown once per session.
+  const seen = useRef<{ session: string | null; shown: Set<string>; unlocked: Set<string> | null; gear: Set<string> | null }>({ session: null, shown: new Set(), unlocked: null, gear: null });
+  const d = game.d;
+  useEffect(() => {
+    if (!d) return;
+    const st = seen.current;
+    const prevU = st.unlocked;
+    const prevG = st.gear;
+    st.unlocked = new Set(d.unlocked);
+    st.gear = new Set(d.gear);
+    if (!d.active) return;
+    if (st.session !== d.active.id) {
+      // A new session: start counting from what is unlocked now.
+      st.session = d.active.id;
+      st.shown = new Set();
+      return;
+    }
+    if (!prevU || !prevG) return;
+    const out: Reward[] = [
+      ...d.unlocked.filter((id) => !prevU.has(id)).map((exerciseId): Reward => ({ kind: 'exercise', exerciseId })),
+      ...d.gear.filter((g) => !prevG.has(g)).map((gearId): Reward => ({ kind: 'gear', gearId })),
+    ].filter((r) => !st.shown.has(rewardKey(r)));
+    out.forEach((r) => st.shown.add(rewardKey(r)));
+    if (out.length) celebrate(out);
+  }, [d]);
+
   const onFinished = (s: SessionSummary) => {
+    const st = seen.current;
+    const before = game.d;
+    const out: Reward[] = s.unlocked.map((exerciseId): Reward => ({ kind: 'exercise', exerciseId }));
+    if (before) {
+      const count = new Set([...before.unlocked, ...s.unlocked]).size;
+      for (const gearId of gearFor(count)) if (!before.gear.includes(gearId)) out.push({ kind: 'gear', gearId });
+    }
+    if (s.levelAfter > s.levelBefore) out.push({ kind: 'level', level: s.levelAfter, stageFrom: avatarStage(s.levelBefore), stageTo: avatarStage(s.levelAfter) });
+    const fresh = out.filter((r) => !st.shown.has(rewardKey(r)));
+    fresh.forEach((r) => st.shown.add(rewardKey(r)));
+    if (fresh.length) celebrate(fresh);
     setSummary(s);
     if (syncConfigured) void syncNow().catch(() => undefined);
   };
@@ -95,10 +136,12 @@ export default function App() {
       </nav>
       {toast && <Toast text={toast} onDone={clearToast} />}
       <ConfirmHost />
+      <CelebrateHost game={game} />
       {summary && (
         <Summary
           s={summary}
           avatarStyle={game.profile.avatarStyle}
+          gender={game.profile.gender}
           measuresOf={game.d.measuresOf}
           onClose={() => {
             setSummary(null);

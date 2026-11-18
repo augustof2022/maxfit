@@ -83,7 +83,47 @@ function fit(ctx: CanvasRenderingContext2D, text: string, maxW: number, weight: 
   return s;
 }
 
-export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { template: PhotoTemplate; size: PhotoSize; stats: StatLine[]; note: string; date: string; accent: string }): Promise<Blob> {
+const DID_HEAD = 46; // header row height of the "I did" block
+
+/** At most `max` lines; if there are more, the last one becomes "+N more". */
+export function clampDid(lines: string[], max: number): string[] {
+  if (max <= 0) return [];
+  if (lines.length <= max) return lines;
+  if (max === 1) return [`+${lines.length} more`];
+  return [...lines.slice(0, max - 1), `+${lines.length - max + 1} more`];
+}
+
+/** Draws the "I did" block: a small header, then one line per exercise. Returns its height. */
+function drawDid(ctx: CanvasRenderingContext2D, o: { title: string; lines: string[]; x: number; top: number; w: number; lineH: number; size: number; accent: string; shadow: boolean }): number {
+  ctx.save();
+  if (o.shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,.55)';
+    ctx.shadowBlur = 10;
+  }
+  ctx.fillStyle = o.accent;
+  ctx.fillRect(o.x, o.top + 4, 6, 24);
+  ctx.fillStyle = 'rgba(255,255,255,.78)';
+  ctx.font = `800 24px ${FONT}`;
+  spaced(ctx, o.title, o.x + 20, o.top + 26, 4);
+  o.lines.forEach((t, i) => {
+    const more = /^\+\d+ more$/.test(t);
+    ctx.fillStyle = more ? 'rgba(255,255,255,.7)' : '#ffffff';
+    fit(ctx, t, o.w, more ? 600 : 750, more ? Math.round(o.size * 0.8) : o.size);
+    ctx.fillText(t, o.x, o.top + DID_HEAD + (i + 1) * o.lineH - (o.lineH - o.size) / 2 - 4);
+  });
+  ctx.restore();
+  return DID_HEAD + o.lines.length * o.lineH;
+}
+
+/** How many "I did" lines fit in `space` px (max 6). */
+function didFit(space: number, lineH: number): number {
+  return Math.max(0, Math.min(6, Math.floor((space - DID_HEAD) / lineH)));
+}
+
+export async function renderPhoto(
+  img: ImageBitmap | HTMLImageElement,
+  opts: { template: PhotoTemplate; size: PhotoSize; stats: StatLine[]; note: string; date: string; accent: string; did?: string[]; didTitle?: string },
+): Promise<Blob> {
   const { w: W, h: H } = SIZES[opts.size];
   const c = document.createElement('canvas');
   c.width = W;
@@ -95,6 +135,18 @@ export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { t
   const stats = opts.stats.slice(0, 6);
   const white = '#ffffff';
   const soft = 'rgba(255,255,255,.72)';
+  const did = opts.did ?? [];
+  const didTitle = opts.didTitle ?? 'I DID';
+  const darken = (from: number, to: number) => {
+    const g = ctx.createLinearGradient(0, from, 0, to);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,.5)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, from, W, to - from);
+    // Then stay dark to the bottom, so there is no hard edge where the template's own fade starts.
+    ctx.fillStyle = 'rgba(0,0,0,.5)';
+    ctx.fillRect(0, to, W, H - to);
+  };
 
   // Brand mark, top right, small and quiet.
   const brand = () => {
@@ -121,7 +173,19 @@ export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { t
     brand();
     const rows = Math.ceil(stats.length / 2);
     const rowH = 150;
-    let y = H - pad - rows * rowH + 40;
+    const y = H - pad - rows * rowH + 40;
+    if (did.length) {
+      // Stack the "I did" block above the date (and caption), below the brand mark.
+      const textTop = opts.note ? y - 118 - 56 : y - 70 - 34;
+      const lineH = 54;
+      const n = didFit(textTop - 36 - (pad + 110), lineH);
+      const lines = clampDid(did, n);
+      if (lines.length) {
+        const top = textTop - 36 - DID_HEAD - lines.length * lineH;
+        if (top < H * 0.48) darken(Math.max(0, top - 160), top + 60);
+        drawDid(ctx, { title: didTitle, lines, x: pad, top, w: W - pad * 2, lineH, size: 40, accent: opts.accent, shadow: true });
+      }
+    }
     ctx.fillStyle = soft;
     ctx.font = `700 28px ${FONT}`;
     spaced(ctx, opts.date.toUpperCase(), pad, y - 70, 4);
@@ -153,6 +217,7 @@ export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { t
     ctx.fillRect(0, 0, W, H);
     brand();
     const [hero, ...rest] = stats;
+    let heroBottom = pad + 60;
     if (hero) {
       ctx.fillStyle = soft;
       ctx.font = `700 30px ${FONT}`;
@@ -162,10 +227,25 @@ export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { t
       ctx.fillText(hero.value, pad - 6, pad + 150 + s * 0.95);
       ctx.fillStyle = opts.accent;
       ctx.fillRect(pad, pad + 150 + s * 0.95 + 34, 120, 10);
+      heroBottom = pad + 150 + s * 0.95 + 44;
     }
     ctx.fillStyle = white;
     ctx.font = `700 30px ${FONT}`;
-    let y = H - pad - (rest.length - 1) * 64;
+    const y = H - pad - (rest.length - 1) * 64;
+    if (did.length) {
+      // Above the caption and the stat list, below the big number.
+      const textTop = opts.note ? y - 90 - 52 : y - 46;
+      const lineH = 56;
+      const n = didFit(textTop - 40 - (heroBottom + 50), lineH);
+      const lines = clampDid(did, n);
+      if (lines.length) {
+        const top = textTop - 40 - DID_HEAD - lines.length * lineH;
+        darken(Math.max(0, top - 140), top + 40);
+        drawDid(ctx, { title: didTitle, lines, x: pad, top, w: W - pad * 2, lineH, size: 42, accent: opts.accent, shadow: true });
+      }
+    }
+    ctx.fillStyle = white;
+    ctx.font = `700 30px ${FONT}`;
     if (opts.note) {
       fit(ctx, opts.note, W - pad * 2, 800, 50);
       ctx.fillText(opts.note, pad, y - 90);
@@ -187,7 +267,12 @@ export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { t
     // Glass card: blur the photo behind a rounded card.
     const cols = Math.min(3, Math.max(1, stats.length));
     const rows = Math.ceil(stats.length / cols) || 1;
-    const cardH = 150 + rows * 150 + (opts.note ? 70 : 0);
+    const baseH = 150 + rows * 150 + (opts.note ? 70 : 0);
+    const didLineH = 48;
+    // The card grows to hold the "I did" lines, but never climbs over the brand mark.
+    const didLines = did.length ? clampDid(did, didFit(H - pad - baseH - (pad + 110) - 40, didLineH)) : [];
+    const didH = didLines.length ? DID_HEAD + didLines.length * didLineH + 40 : 0;
+    const cardH = baseH + didH;
     const x = pad - 24;
     const y = H - pad - cardH;
     const w = W - (pad - 24) * 2;
@@ -220,6 +305,13 @@ export async function renderPhoto(img: ImageBitmap | HTMLImageElement, opts: { t
       ctx.fillStyle = white;
       fit(ctx, opts.note, w - 96, 800, 46);
       ctx.fillText(opts.note, ix, iy);
+    }
+    if (didLines.length) {
+      iy += 50;
+      iy += drawDid(ctx, { title: didTitle, lines: didLines, x: ix, top: iy, w: w - 96, lineH: didLineH, size: 36, accent: opts.accent, shadow: false });
+      ctx.fillStyle = 'rgba(255,255,255,.16)';
+      ctx.fillRect(ix, iy + 22, w - 96, 2);
+      iy += 10;
     }
     const colW = (w - 96) / cols;
     stats.forEach((st, i) => {

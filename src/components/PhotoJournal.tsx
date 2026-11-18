@@ -5,6 +5,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { EXERCISE_BY_ID } from '../core/exercises';
+import { didLines } from '../core/history';
 import { fmtClock } from '../core/live';
 import { fmtValues } from '../core/measures';
 import { AVATAR_STAGES, bmi, COLORS, dayKey, doneSessions } from '../core/rules';
@@ -16,18 +17,32 @@ import { loadImage, renderPhoto, shrink, SIZES, TEMPLATES, type PhotoSize, type 
 import { confirmAsk } from './Confirm';
 import { IconBtn, Sheet } from './ui';
 
-/** Every stat that can go on a photo, with today's value. Weight and BMI are off by default (private). */
-function statOptions(game: Game): (StatLine & { on: boolean })[] {
-  const d = game.d!;
-  const p = game.profile!;
+/** The workout day a photo is about: today's finished sessions, or else the last one. */
+function refDay(game: Game) {
   const today = dayKey(Date.now());
   const done = doneSessions(game.sessions);
   const todays = done.filter((s) => dayKey(s.startedAt) === today);
   const last = done[done.length - 1];
   const ref = todays.length ? todays : last ? [last] : [];
-  const mins = Math.round(ref.reduce((t, s) => t + s.activeSec + s.restSec, 0) / 60);
   const ids = new Set(ref.map((s) => s.id));
-  const refSets = d.liveSets.filter((x) => ids.has(x.sessionId));
+  return { today: todays.length > 0, ref, sets: game.d!.liveSets.filter((x) => ids.has(x.sessionId)) };
+}
+
+/** "I did" lines for the photo, e.g. "Push-ups · 25 reps": every exercise that day, or only the records. */
+function didOptions(game: Game): Record<'all' | 'records', string[]> {
+  const d = game.d!;
+  const { sets } = refDay(game);
+  const make = (mode: 'all' | 'records') => didLines(sets, mode, d.measuresOf, d.beatOf).map((l) => `${l.name} · ${l.value}`);
+  return { all: make('all'), records: make('records') };
+}
+
+/** Every stat that can go on a photo, with today's value. Weight and BMI are off by default (private). */
+function statOptions(game: Game): (StatLine & { on: boolean })[] {
+  const d = game.d!;
+  const p = game.profile!;
+  const { today, ref, sets: refSets } = refDay(game);
+  const todays = today ? ref : [];
+  const mins = Math.round(ref.reduce((t, s) => t + s.activeSec + s.restSec, 0) / 60);
   const pr = [...d.liveSets].reverse().find((x) => x.isPR);
   const prEx = pr ? EXERCISE_BY_ID[pr.exerciseId] : null;
   const w = game.weights[game.weights.length - 1];
@@ -38,7 +53,7 @@ function statOptions(game: Game): (StatLine & { on: boolean })[] {
     { key: 'record', label: prEx ? `Record · ${prEx.name}` : 'Latest record', value: pr && prEx ? fmtValues(d.measuresOf(prEx), pr) : '—', on: !!pr },
     { key: 'sessions', label: 'Sessions', value: String(d.stats.sessions), on: false },
     { key: 'minutes', label: 'Total time', value: fmtClock(d.stats.totalMinutes * 60), on: false },
-    { key: 'unlocked', label: 'Moves unlocked', value: String(d.unlocked.length), on: false },
+    { key: 'unlocked', label: 'Exercises unlocked', value: String(d.unlocked.length), on: false },
     { key: 'weight', label: 'Weight', value: w ? `${w.kg} kg` : '—', on: false },
     { key: 'bmi', label: 'BMI', value: w && p.heightCm ? String(bmi(w.kg, p.heightCm)) : '—', on: false },
   ];
@@ -125,6 +140,14 @@ function Thumb({ photo, onClick }: { photo: Photo; onClick: () => void }) {
 
 function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; photo?: Photo; onClose: () => void }) {
   const options = useMemo(() => statOptions(game), [game]);
+  const fresh = useMemo(() => didOptions(game), [game]);
+  // An old photo keeps the "I did" lines it was saved with (they were true that day).
+  const kept = photo?.did;
+  const [didMode, setDidMode] = useState<'all' | 'records'>(kept?.mode ?? 'all');
+  const [didOn, setDidOn] = useState<boolean>(photo ? !!kept : fresh.all.length > 0);
+  const didAll = kept ? kept.lines : fresh[didMode];
+  const did = useMemo(() => (didOn ? didAll : []), [didOn, didAll]);
+  const isToday = useMemo(() => refDay(game).today, [game]);
   const [img, setImg] = useState<ImageBitmap | HTMLImageElement | null>(null);
   const [template, setTemplate] = useState<PhotoTemplate>((photo?.template as PhotoTemplate) ?? 'clean');
   const [size, setSize] = useState<PhotoSize>(photo?.size ?? 'story');
@@ -157,18 +180,27 @@ function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; phot
     if (!img) return;
     let live = true;
     const t = setTimeout(() => {
-      void renderPhoto(img, { template, size, stats: lines, note: note.trim(), date: new Date(at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }), accent }).then((b) => live && setOut(b));
+      void renderPhoto(img, {
+        template,
+        size,
+        stats: lines,
+        note: note.trim(),
+        date: new Date(at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }),
+        accent,
+        did,
+        didTitle: (kept?.mode ?? didMode) === 'records' ? 'I DID · NEW RECORDS' : 'I DID',
+      }).then((b) => live && setOut(b));
     }, 120);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [img, template, size, lines, note, at, accent]);
+  }, [img, template, size, lines, note, at, accent, did, didMode, kept]);
 
   /** Save to the on-phone timeline (once; later taps update the same entry). */
   const log = async (composite: Blob): Promise<void> => {
     const image = photo?.image ?? (await shrink(img!));
-    await db.photos.put({ id: photo?.id ?? savedId, at, image, composite, template, size, stats: lines, note: note.trim(), updatedAt: Date.now() });
+    await db.photos.put({ id: photo?.id ?? savedId, at, image, composite, template, size, stats: lines, note: note.trim(), did: did.length ? { mode: kept?.mode ?? didMode, lines: did } : undefined, updatedAt: Date.now() });
   };
   const [savedId] = useState(() => uid());
 
@@ -227,6 +259,26 @@ function Composer({ game, file, photo, onClose }: { game: Game; file: Blob; phot
           </button>
         ))}
       </div>
+      {didAll.length > 0 || fresh.all.length > 0 ? (
+        <div className="stack" style={{ gap: 6 }}>
+          <button className={`chip ${didOn ? 'on' : ''}`} aria-pressed={didOn} onClick={() => setDidOn((v) => !v)} style={{ alignSelf: 'flex-start' }}>
+            {didOn ? '✓ ' : ''}"I did" list on the photo
+          </button>
+          {didOn && !kept && (
+            <div className="seg" role="radiogroup" aria-label="I did: which exercises">
+              <button role="radio" aria-checked={didMode === 'all'} className={`chip ${didMode === 'all' ? 'on' : ''}`} onClick={() => setDidMode('all')}>
+                {isToday ? 'All exercises today' : 'All exercises (last workout)'}
+              </button>
+              <button role="radio" aria-checked={didMode === 'records'} aria-disabled={fresh.records.length === 0} disabled={fresh.records.length === 0} className={`chip ${didMode === 'records' ? 'on' : ''}`} onClick={() => setDidMode('records')}>
+                Only records
+              </button>
+            </div>
+          )}
+          {didOn && !kept && fresh.records.length === 0 && <span className="tiny muted did-note">No records that day, so "Only records" is off.</span>}
+          {didOn && kept && <span className="tiny muted did-note">Kept as saved on that day.</span>}
+          {didOn && <span className="tiny muted did-note">{didAll.length} exercise{didAll.length === 1 ? '' : 's'}{didAll.length > 6 ? ' (the photo shows up to 6)' : ''}</span>}
+        </div>
+      ) : null}
       <label className="field">
         Caption (optional)
         <input className="input" maxLength={40} value={note} placeholder="e.g. Week 4. Still showing up." onChange={(e) => setNote(e.target.value)} />

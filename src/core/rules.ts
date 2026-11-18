@@ -503,7 +503,7 @@ export function ruleMet(rule: UnlockRule, st: GameStats): boolean {
 
 /**
  * The unlock rule in words. `known(id)` = may this exercise be named? Locked ones are surprises
- * (Renz, 2026-11-18), so they show as "a hidden move".
+ * (Renz, 2026-11-18), so they show as "a hidden exercise".
  */
 export function describeRule(rule: UnlockRule, known: (id: string) => boolean = () => true): string {
   switch (rule.type) {
@@ -522,7 +522,7 @@ export function describeRule(rule: UnlockRule, known: (id: string) => boolean = 
     case 'record': {
       const ex = EXERCISE_BY_ID[rule.exerciseId];
       const m = rule.measure ?? (ex ? mainMeasure(ex) : 'reps');
-      const name = known(rule.exerciseId) ? (ex?.name ?? rule.exerciseId) : 'a hidden move';
+      const name = known(rule.exerciseId) ? (ex?.name ?? rule.exerciseId) : 'a hidden exercise';
       return `${name}: ${fmtValues([m], { reps: rule.value, seconds: rule.value, distanceKm: rule.value, weightKg: rule.value })} in one set`;
     }
     case 'all':

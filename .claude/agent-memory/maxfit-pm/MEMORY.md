@@ -22,3 +22,7 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-18: Supabase legacy anon/service_role keys work only until end of 2026; use sb_publishable_ keys (docs: migrating-to-new-api-keys).
 - 2026-11-18: After changing how records are scored, re-check the edit path and the STORED flags (one-time migration with a version flag), not only the log path.
 - 2026-11-18: Flaky test root cause: two sets in the same millisecond were ordered by random uuid. logSet now gives each set a time after the last one of its exercise.
+- 2026-11-18: A floating button covers the last row of the page; always add bottom space while it shows (e2e caught "Finish" blocked).
+- 2026-11-18: SVG: never mix a transform attribute with CSS transform-box/scale on the same element; wrap in a <g> for placement.
+- 2026-11-18: A new sync table must not break sync before the server migration: skip on check violation (23514) with its own push mark.
+- 2026-11-18: Splitting work by FILE OWNERSHIP let frontend-dev build items 6-8 in parallel with zero merge conflicts.

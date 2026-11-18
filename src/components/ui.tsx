@@ -160,8 +160,8 @@ export function WeekChart({ days, goalMin }: { days: DayTotal[]; goalMin: number
   );
 }
 
-export function LineChart({ points, unit }: { points: { label: string; v: number }[]; unit: string }) {
-  if (points.length < 2) return <p className="muted small">Log 2 or more weigh-ins to see your trend.</p>;
+export function LineChart({ points, unit, empty = 'Log 2 or more weigh-ins to see your trend.', marks }: { points: { label: string; v: number }[]; unit: string; empty?: string; marks?: boolean[] }) {
+  if (points.length < 2) return <p className="muted small">{empty}</p>;
   const W = 320;
   const H = 130;
   const vs = points.map((p) => p.v);
@@ -173,9 +173,16 @@ export function LineChart({ points, unit }: { points: { label: string; v: number
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Trend in ${unit}`}>
       <path d={d} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" />
-      {points.map((p, i) => (
-        <circle key={i} cx={x(i)} cy={y(p.v)} r={3} fill="var(--accent2)" />
-      ))}
+      {points.map((p, i) =>
+        marks?.[i] ? (
+          <g key={i}>
+            <circle cx={x(i)} cy={y(p.v)} r={6.5} fill="none" stroke="var(--accent2)" strokeWidth="2" />
+            <circle cx={x(i)} cy={y(p.v)} r={3.5} fill="var(--accent2)" />
+          </g>
+        ) : (
+          <circle key={i} cx={x(i)} cy={y(p.v)} r={3} fill={marks ? "var(--accent)" : "var(--accent2)"} />
+        ),
+      )}
       <text x={10} y={H - 4} fontSize="10" fill="var(--muted)">
         {points[0].label}
       </text>

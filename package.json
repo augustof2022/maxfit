@@ -1,7 +1,7 @@
 {
   "name": "maxfit",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "MaxFit - a gym and fitness tracker that plays like a game: unlock exercises, beat your records, evolve your avatar.",
   "scripts": {

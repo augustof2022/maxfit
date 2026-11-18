@@ -22,5 +22,18 @@ Status key: ✅ built and tested · 🟡 built, needs a device or Renz's action 
 | — | Android APK | Capacitor project in `android/`; GitHub Actions builds a debug APK | APK built in GitHub Actions (run 1, 2026-11-17, success). Alarms still need a real-phone test | 🟡 |
 | — | Backup | Export / import JSON | Manual | ✅ |
 
+## Round 4 — v0.3.0 (Boss R's 8 items, 2026-11-18)
+
+| # | Item | What we built | Test | Status |
+|---|---|---|---|---|
+| R4-1 | Exercise plans per place | Train: plans of the picked place right under "Where are you today?" (name, description, last used, N exercises). Create / edit (name, description, place, unlocked + doable exercises only, sets, target, "How to beat it", reorder, remove), duplicate, delete (asks first), import from another place = a deep COPY. Starting a plan shows only its exercises + "Show all exercises here". Synced table `plans` + in backups | Unit: copy independence (core + database), names, checks, backup, v3→v4 upgrade. E2E: create, reorder, duplicate, delete, import + edit copy, start plan | ✅ (cloud sync of plans 🟡: server migration not applied yet, Q28) |
+| R4-2 | Timer for timed exercises | ▶ Start timer → 3 · 2 · 1 · GO! (beeps) → full-screen clock + big STOP; Stop fills the seconds (editable before Log) | E2E: countdown, clock, Stop fills time | ✅ |
+| R4-3 | Auto work / rest + "Back to work" FAB | Timer start = working, Stop / Log = resting; rep exercises get a big ▶ Start set; "Back to work" floats bottom-right while resting (red when rest is over); space under Finish so it is never covered | E2E: FAB in view after scrolling, Start set → working, timer → working → resting | ✅ |
+| R4-4 | Records and history everywhere | Every exercise row: Last (date) · Best. Tap → history: best set of each day, 🏆 record days, trend chart with record days ringed. Home: "Exercises you've done"; Train: rows with Last/Best; Progress: done list + inventory with history | Unit: best per day (any, same weight, faster time). E2E: history list, record mark, chart, Home list | ✅ |
+| R4-5 | Grand unlock moments mid-session | Full-screen bronze/red card with laurel, serif type, rays and shine (still with reduced motion), one at a time, "Skip the rest" when 3+ wait. New exercise: name, cue, "See it and try it…", ＋ Add to plan. Gear and colour: avatar wearing it. Level: big level-up card with the evolution | E2E: mid-session card after a record, add-to-plan from the card | ✅ |
+| R4-6 | Photo card "I did" | "I did: Push-up · 25 reps, Plank · 60s" with the best set per exercise; choose all exercises or records only; kept with the photo | E2E: lines saved with the photo; worker screenshots of all 3 looks | ✅ |
+| R4-7 | BMI bar animation | Marker slides into place with a soft fill, 1 s; in place with reduced motion | Worker screenshots (settled + mid-slide) | ✅ |
+| R4-8 | Gender | Settings → You: Male / Female (synced in the profile). Female avatar: same stages, gear and moves, female body shape and hair, all 3 styles | E2E: Female saved; worker screenshots | ✅ |
+
 ## Out of scope for v0.1 (see `team/BACKLOG.md`)
 Exercise images/videos, custom exercises, Play Store release, social features, GPS distance.
