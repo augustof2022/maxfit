@@ -30,20 +30,25 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-const shot = (n) => page.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
+// Wait for the screen's ease-in (about 0.5 s) so screenshots show the settled screen.
+const shot = async (n) => {
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
+};
 
 try {
   await page.goto(BASE);
   await page.getByRole('heading', { name: 'MaxFit' }).waitFor();
   await page.getByRole('heading', { name: 'Level 1', exact: true }).waitFor();
   check('Home loads with level 1 avatar', true);
-  check('Starter: 2 exercises unlocked', await page.getByText('2 exercises unlocked').isVisible());
+  check('Starter: 5 home-friendly exercises unlocked', await page.getByText(/^5 exercises unlocked/).isVisible());
+  check('Goal prompt shows on first open', await page.getByRole('heading', { name: 'What is your goal?' }).isVisible());
   await shot('01-home');
 
   // Train: location picker -> Home has no dumbbells
   await page.getByRole('button', { name: 'Start session' }).click();
   await page.getByRole('heading', { name: 'Train' }).waitFor();
-  check('Train shows only push-up and run at Home', (await page.getByText('You can do here (2)').count()) === 1);
+  check('Train shows the 5 starters at Home', (await page.getByText('You can do here (5)').count()) === 1);
   await shot('02-train-pre');
 
   // Settings: rest limit 15 s so the alarm test is quick
@@ -59,7 +64,7 @@ try {
   await page.getByText('Working').waitFor();
   await page.getByRole('button', { name: /Push-up/ }).click();
   check('First push-up target shown', await page.getByText('First time: try 5').isVisible());
-  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'More Reps done' }).click();
+  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'More Reps', exact: true }).click();
   await page.getByRole('button', { name: 'Log set + rest' }).click();
   await page.getByText('Resting').waitFor();
   check('Logging a set starts the rest timer', true);
@@ -70,7 +75,7 @@ try {
   await page.getByRole('button', { name: 'Back to work' }).click();
 
   // Second set beats the record -> PR
-  check('Target is now record + 1 (11)', await page.getByText('Beat 10: do 11').isVisible());
+  check('Target is now record + 1 (11)', await page.getByText(/Beat 10 reps: one more rep → 11 reps/).isVisible());
   await page.getByRole('button', { name: 'Log set + rest' }).click();
   await page.getByText(/NEW RECORD/).waitFor({ timeout: 3000 });
   check('Beating the record shows NEW RECORD', true);
@@ -134,9 +139,11 @@ try {
   await shot('11-progress');
 
   // Gym location shows equipment exercises once unlocked; Home does not.
+  // Unlocks come from the data now: 14 finished sessions unlock the dumbbell curl.
   await page.evaluate(async () => {
     const { db } = await import('/src/data/db.ts');
-    await db.profile.update('me', { unlocked: ['push_up', 'run', 'db_curl'] });
+    const t = Date.now() - 30 * 86400000;
+    await db.sessions.bulkPut(Array.from({ length: 14 }, (_, i) => ({ id: `old${i}`, startedAt: t + i * 3600000, endedAt: t + i * 3600000 + 600000, locationId: null, status: 'done', activeSec: 500, restSec: 100, xpEarned: 10, prs: 0, live: null, updatedAt: Date.now() })));
   });
   await page.getByRole('button', { name: 'Train' }).click();
   await page.getByRole('radio', { name: /Gym/ }).click();
@@ -171,7 +178,82 @@ try {
   // Reload keeps data (local database)
   await page.reload();
   await page.getByRole('button', { name: 'Progress' }).click();
-  check('Data survives reload', await page.getByText('Recent sessions').isVisible());
+  check('Data survives reload', await page.getByRole('heading', { name: 'History' }).isVisible());
+
+  // Surprises: locked moves are hidden; only a count and a nameless hint show.
+  check('Locked exercises are hidden (no Muscle-up on Progress)', (await page.getByText('Muscle-up').count()) === 0 && (await page.getByText(/surprises waiting/).count()) > 0);
+  await shot('14-progress-surprises');
+
+  // How to do it: real start/finish photos + avatar + YouTube search.
+  await page.getByRole('button', { name: 'How to do Push-up' }).click();
+  await page.getByRole('img', { name: 'Push-up, finish position' }).waitFor();
+  const ok = await page.getByRole('img', { name: 'Push-up, start position' }).evaluate((img) => img.complete && img.naturalWidth > 0);
+  check('Exercise demo shows real photos and a YouTube link', ok && (await page.getByRole('link', { name: /Watch on YouTube/ }).count()) === 1);
+  await shot('14b-demo');
+  await page.getByRole('button', { name: 'Got it' }).click();
+
+  // Measures: push-up measured by reps + time.
+  await page.getByRole('button', { name: 'How Push-up is measured' }).click();
+  await page.getByRole('button', { name: /^Time/ }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Change', exact: true }).click();
+  await page.waitForTimeout(300);
+  check('Push-up can be measured by reps + time', (await page.getByRole('button', { name: 'How Push-up is measured' }).textContent()).includes('Reps+Time'));
+
+  // Edit a set from History, with "are you sure?"
+  await page.getByRole('button', { name: 'Edit Push-up set' }).first().click();
+  await page.getByRole('heading', { name: /Edit set · Push-up/ }).waitFor();
+  await page.getByRole('button', { name: 'More Reps', exact: true }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  check('Edit asks "Save this correction?"', await page.getByRole('heading', { name: 'Save this correction?' }).isVisible());
+  await page.getByRole('button', { name: 'Save', exact: true }).last().click();
+  await page.waitForTimeout(300);
+  await shot('15-edited');
+
+  // Delete a session, with confirm
+  await page.getByRole('button', { name: 'Edit session' }).first().click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  check('Delete asks first', await page.getByRole('heading', { name: 'Delete this session?' }).isVisible());
+  await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
+  await page.waitForTimeout(300);
+
+  // Goals + avatar style
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: /Lose weight/ }).first().click();
+  await page.getByRole('button', { name: 'Core', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Save goals' }).first().click();
+  await page.waitForTimeout(300);
+  check('Goals saved', await page.getByRole('button', { name: /Lose weight/ }).first().getAttribute('aria-pressed') === 'true');
+  await page.getByRole('radio', { name: /Neon line/ }).click();
+  await page.waitForTimeout(400);
+  check('Three avatar styles, one picked', (await page.getByRole('radio', { name: /Athlete|Neon line|Buddy/ }).count()) === 3 && (await page.getByRole('radio', { name: /Neon line/ }).getAttribute('aria-checked')) === 'true');
+  await shot('16-settings-goals-style');
+
+  // Progress photo with stats, saved to the on-phone timeline.
+  await page.getByRole('button', { name: 'Body' }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Choose photo/ }).click();
+  await (await chooser).setFiles('tests/e2e/fixtures/photo.jpg');
+  await page.getByRole('img', { name: 'Preview with your stats' }).waitFor({ timeout: 10000 });
+  await page.getByRole('radio', { name: 'Glass card' }).click();
+  await page.waitForTimeout(500);
+  await shot('17-photo-composer');
+  const dl = page.waitForEvent('download');
+  await page.getByRole('button', { name: '⬇ Save' }).click();
+  await dl;
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  check('Photo saved to the timeline', (await page.getByRole('button', { name: /Photo from/ }).count()) === 1);
+  await shot('18-body-photos');
+
+  // Delete test data (two questions), then Home is back to a fresh start.
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Delete test data' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Delete everything' }).click();
+  await page.waitForTimeout(400);
+  await page.locator('.tabbar').getByRole('button', { name: 'Home' }).click();
+  await page.waitForTimeout(600);
+  check('Reset: back to level 1 and 5 starters', await page.getByRole('heading', { name: 'Level 1', exact: true }).isVisible() && (await page.getByText(/^5 exercises unlocked/).count()) === 1);
 } catch (e) {
   check('Flow ran to the end', false, String(e).split('\n')[0]);
   await shot('99-failure');

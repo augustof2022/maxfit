@@ -15,12 +15,21 @@ export interface EquipmentItem {
   deleted?: boolean;
 }
 
-/** How an exercise is measured. */
-export type Metric =
-  | 'reps' // count of reps in one set (push-ups)
-  | 'time' // seconds held or done (plank)
-  | 'weight_reps' // kg x reps (dumbbell curl)
-  | 'distance'; // km + minutes, with run / walk / rest split (running)
+/**
+ * One way to measure a set. An exercise can be tracked by one or more (Renz, 2026-11-18).
+ * 'time' = longer wins (plank, a run's duration). 'speed' = "faster time": the same seconds, but lower
+ * wins (a 100 m sprint, a 1 km time trial). Renz, 2026-11-18: "a sprint is a set distance, how fast".
+ */
+export type Measure = 'reps' | 'time' | 'speed' | 'distance' | 'weight';
+
+/** Body areas the user can focus on. */
+export type Focus = 'chest' | 'back' | 'shoulders' | 'arms' | 'core' | 'legs' | 'cardio';
+
+/** Training goals the user can pick (more than one). */
+export type Goal = 'lose_weight' | 'lean' | 'muscle' | 'strength' | 'stamina';
+
+/** Avatar look (Settings). */
+export type AvatarStyle = 'athlete' | 'line' | 'buddy';
 
 export type UnlockRule =
   | { type: 'start' }
@@ -28,7 +37,8 @@ export type UnlockRule =
   | { type: 'sessions'; count: number }
   | { type: 'level'; level: number }
   | { type: 'totalMinutes'; minutes: number }
-  | { type: 'record'; exerciseId: string; value: number }
+  /** Best value of one measure (default: the exercise's main measure) reaches `value`. */
+  | { type: 'record'; exerciseId: string; value: number; measure?: Measure }
   | { type: 'all'; rules: UnlockRule[] }
   | { type: 'any'; rules: UnlockRule[] }
   | { type: 'secret' }; // only from a mystery chest
@@ -36,10 +46,21 @@ export type UnlockRule =
 export interface Exercise {
   id: string;
   name: string;
-  metric: Metric;
+  /** Default measures, main one first (the user may choose others). */
+  measures: Measure[];
   /** All of these must be at the location. Empty = bodyweight, works anywhere. */
   equipment: EquipmentId[];
   muscles: string[];
+  /** Body areas it trains, for the goal profile. */
+  focus: Focus[];
+  /** The move this one is a variation or regression of (shown as "Variation of ..."). */
+  base?: string;
+  /** Secrets: a chest can only give it once this exercise is unlocked. */
+  requires?: string;
+  /** free-exercise-db id (public domain) whose 2 photos are bundled in public/demos/. */
+  demo?: string;
+  /** Goals it serves best, for the goal profile. */
+  goals: Goal[];
   /** 0 = secret, 1 = starter ... 6 = legend */
   tier: number;
   unlock: UnlockRule;
@@ -65,7 +86,11 @@ export interface Profile {
   id: 'me';
   name: string;
   heightCm: number | null;
-  /** Never re-lock. Merged as a union when syncing so no device loses an unlock. */
+  /**
+   * Legacy store of unlocks. Unlocks are now worked out from the data (sessions and sets), so deleting
+   * wrong data can lock an exercise again (Renz, 2026-11-18). Only secret exercises found in chests
+   * before that change are still read from here.
+   */
   unlocked: string[];
   cosmetics: string[];
   color: string;
@@ -74,6 +99,20 @@ export interface Profile {
   settings: Settings;
   lastLocationId: string | null;
   challenge: Challenge | null;
+  /** Goals and body focus; surprises and suggestions lean toward them. */
+  goals?: Goal[];
+  focus?: Focus[];
+  /** The user's own choice of measures per exercise id. */
+  exerciseMeasures?: Record<string, Measure[]>;
+  avatarStyle?: AvatarStyle;
+  /**
+   * Moves already shown to the user. They stay in the inventory even if the equipment for them is
+   * removed later (shown as "needs equipment"); moves earned but never doable stay hidden until the
+   * equipment is added, then are revealed as a surprise at the next session end (code review, 2026-11-18).
+   */
+  revealed?: string[];
+  /** When "Delete test data" last ran; sync uses it so old copies do not bring progress back. */
+  resetAt?: number;
   updatedAt: number;
 }
 
@@ -107,6 +146,8 @@ export interface Session {
   restSec: number;
   xpEarned: number;
   prs: number;
+  /** Secret exercise this session's mystery chest gave (deleting the session locks it again). */
+  chestSecret?: string;
   live: LiveState | null;
   updatedAt: number;
   deleted?: boolean;
@@ -137,4 +178,20 @@ export interface WeightEntry {
   kg: number;
   updatedAt: number;
   deleted?: boolean;
+}
+
+/** A progress photo. Kept on this phone only (Renz, 2026-11-18): never synced to the cloud. */
+export interface Photo {
+  id: string;
+  at: number;
+  /** The photo itself (resized JPEG). */
+  image: Blob;
+  /** The finished picture with the stats on top, as saved or shared. */
+  composite: Blob | null;
+  template: string;
+  size: 'story' | 'post';
+  /** Stat lines shown on the photo, as text at the time it was made. */
+  stats: { key: string; label: string; value: string }[];
+  note: string;
+  updatedAt: number;
 }

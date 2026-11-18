@@ -14,12 +14,27 @@ export function mergeRow(tbl: string, local: Row | undefined, remote: Row, now =
   if (tbl !== 'profile') return local.updatedAt < remote.updatedAt ? remote : null;
 
   const winner = local.updatedAt >= remote.updatedAt ? local : remote;
+  // "Delete test data" stamps resetAt. A copy from before the newest reset must not add its old
+  // unlocks and colours back, so then the lists come only from the side with the newest reset.
+  const lr = Number(local.resetAt ?? 0);
+  const rr = Number(remote.resetAt ?? 0);
+  if (lr !== rr) {
+    const fresh = lr > rr ? local : remote;
+    const out = { ...winner, unlocked: fresh.unlocked, cosmetics: fresh.cosmetics, revealed: fresh.revealed, resetAt: Math.max(lr, rr) };
+    if (winner === local && fresh === local) return null;
+    if (winner === remote && fresh === remote) return remote;
+    return { ...out, updatedAt: Math.max(now, local.updatedAt, remote.updatedAt) };
+  }
   const unlocked = union(local.unlocked, remote.unlocked);
   const cosmetics = union(local.cosmetics, remote.cosmetics);
-  const winnerHasAll = unlocked.length === union(winner.unlocked, []).length && cosmetics.length === union(winner.cosmetics, []).length;
+  // Shown moves: a union too (both devices showed them); undefined stays undefined (older app).
+  const revealed = local.revealed === undefined && remote.revealed === undefined ? undefined : union(local.revealed, remote.revealed);
+  const winnerHasAll =
+    unlocked.length === union(winner.unlocked, []).length && cosmetics.length === union(winner.cosmetics, []).length && (revealed?.length ?? 0) === union(winner.revealed, []).length;
   if (winner === local && winnerHasAll) return null;
   // If the merged row differs from both copies, stamp it now so it is pushed back up.
-  const remoteHasAll = unlocked.length === union(remote.unlocked, []).length && cosmetics.length === union(remote.cosmetics, []).length;
+  const remoteHasAll =
+    unlocked.length === union(remote.unlocked, []).length && cosmetics.length === union(remote.cosmetics, []).length && (revealed?.length ?? 0) === union(remote.revealed, []).length;
   const updatedAt = winner === remote && remoteHasAll ? remote.updatedAt : Math.max(now, local.updatedAt, remote.updatedAt);
-  return { ...winner, unlocked, cosmetics, updatedAt };
+  return revealed === undefined ? { ...winner, unlocked, cosmetics, updatedAt } : { ...winner, unlocked, cosmetics, revealed, updatedAt };
 }

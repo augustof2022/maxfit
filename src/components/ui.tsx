@@ -1,5 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DayTotal } from '../core/rules';
+
+export const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(Date.now());
@@ -10,13 +12,52 @@ export function useNow(intervalMs = 1000): number {
   return now;
 }
 
-export function Bar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+/**
+ * Progress bar that fills like liquid: it rises from empty on first show, eases to new values,
+ * and a slow sheen runs through the fill (CSS, off when the phone asks for reduced motion).
+ */
+export function Bar({ value, max, tone = 'accent', thick = false, label }: { value: number; max: number; tone?: 'accent' | 'good' | 'rest'; thick?: boolean; label?: string }) {
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(pct));
+    return () => cancelAnimationFrame(id);
+  }, [pct]);
   return (
-    <div className="bar" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-      <i style={{ width: `${pct}%` }} />
+    <div className={`bar ${tone} ${thick ? 'thick' : ''} ${pct >= 100 ? 'full' : ''}`} role="progressbar" aria-label={label} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+      <i style={{ width: `${shown}%` }} />
     </div>
   );
+}
+
+/** A number that counts up to its new value (about 0.7 s, fast at first, then settles). */
+export function CountUp({ value, decimals = 0, ms = 700 }: { value: number; decimals?: number; ms?: number }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    if (reducedMotion() || from.current === value) {
+      from.current = value;
+      setShown(value);
+      return;
+    }
+    const start = performance.now();
+    const a = from.current;
+    let id = 0;
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - start) / ms);
+      const e = 1 - Math.pow(1 - k, 3);
+      setShown(a + (value - a) * e);
+      if (k < 1) id = requestAnimationFrame(tick);
+      else from.current = value;
+    };
+    id = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(id);
+      from.current = value;
+    };
+  }, [value, ms]);
+  const f = 10 ** decimals;
+  return <>{(Math.round(shown * f) / f).toFixed(decimals)}</>;
 }
 
 export function Stepper({ value, onChange, step = 1, min = 0, label, unit }: { value: number; onChange: (v: number) => void; step?: number; min?: number; label: string; unit?: string }) {
@@ -145,9 +186,11 @@ export function LineChart({ points, unit }: { points: { label: string; v: number
   );
 }
 
-export const ICONS: Record<string, string> = {
-  reps: '💪',
-  time: '⏱️',
-  weight_reps: '🏋️',
-  distance: '🏃',
-};
+/** Small round button used for edit / delete on list rows. */
+export function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button className="btn ghost icon-btn" onClick={onClick} aria-label={label} title={label}>
+      {children}
+    </button>
+  );
+}

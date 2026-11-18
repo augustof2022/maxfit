@@ -6,22 +6,26 @@ import { EQUIPMENT } from '../core/equipment';
 import { activeSeconds, newLive, switchMode, totals } from '../core/live';
 import {
   availableExercises,
-  betterThan,
   buildStats,
   challengeMet,
   computeRecords,
   dayKey,
   doneSessions,
+  fitsEquipment,
+  ownedEquipment,
   habitTarget,
   levelFromXp,
-  newUnlocks,
   openChest,
+  prFlags,
   sessionXp,
   totalXp,
+  unlockedFrom,
   XP,
   type ChestReward,
+  type MeasuresOf,
 } from '../core/rules';
-import type { EquipmentCategory, EquipmentId, LiveMode, Location, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
+import { beats, measuresFor } from '../core/measures';
+import type { EquipmentCategory, EquipmentId, Focus, Goal, LiveMode, Location, Measure, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
 import { db, uid } from './db';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -46,6 +50,11 @@ export function defaultProfile(now = 0): Profile {
     settings: DEFAULT_SETTINGS,
     lastLocationId: null,
     challenge: null,
+    goals: [],
+    focus: [],
+    exerciseMeasures: {},
+    revealed: [...STARTER_IDS],
+    avatarStyle: 'athlete',
     updatedAt: now,
   };
 }
@@ -70,6 +79,27 @@ export async function getProfile(): Promise<Profile> {
 
 export async function updateProfile(patch: Partial<Profile>): Promise<void> {
   await db.profile.update('me', { ...patch, updatedAt: Date.now() });
+}
+
+function measuresOfProfile(p: Profile): MeasuresOf {
+  return (ex) => measuresFor(ex, p.exerciseMeasures);
+}
+
+/** Set how this user measures one exercise (empty = back to the default). */
+export async function setExerciseMeasures(exerciseId: string, measures: Measure[]): Promise<void> {
+  const p = await getProfile();
+  const own = { ...(p.exerciseMeasures ?? {}) };
+  if (measures.length) own[exerciseId] = measures;
+  else delete own[exerciseId];
+  await db.transaction('rw', db.profile, db.sets, db.sessions, async () => {
+    await updateProfile({ exerciseMeasures: own });
+    // What counts as a record changed, so re-check the record flags (and their XP).
+    await reconcileRecords([exerciseId]);
+  });
+}
+
+export async function setGoals(goals: Goal[], focus: Focus[]): Promise<void> {
+  await updateProfile({ goals, focus });
 }
 
 export async function updateSettings(patch: Partial<Settings>): Promise<void> {
@@ -176,17 +206,18 @@ async function allSets(): Promise<WorkSet[]> {
 
 export async function logSet(sessionId: string, exerciseId: string, values: Pick<WorkSet, 'reps' | 'seconds' | 'weightKg' | 'distanceKm' | 'durationSec' | 'runSec' | 'walkSec' | 'restSec'>): Promise<LoggedSet> {
   const ex = EXERCISE_BY_ID[exerciseId];
-  const before = computeRecords(await allSets()).get(exerciseId);
+  const measuresOf = measuresOfProfile(await getProfile());
+  const before = computeRecords(await allSets(), measuresOf).get(exerciseId);
   const now = Date.now();
   const set: WorkSet = { id: uid(), sessionId, exerciseId, at: now, ...values, isPR: false, updatedAt: now };
-  const isPR = !!before?.bestSet && betterThan(ex, set, before.bestSet);
+  const isPR = beats(measuresOf(ex), set, before?.bestSet);
   set.isPR = isPR;
   await db.sets.put(set);
   return { set, isPR, previousBest: before?.best ?? 0 };
 }
 
 /** Ends a cardio block: saves the run as one set, returns to normal session mode. */
-export async function finishCardio(sessionId: string, distanceKm: number): Promise<LoggedSet | null> {
+export async function finishCardio(sessionId: string, distanceKm: number, reps?: number): Promise<LoggedSet | null> {
   const s = await db.sessions.get(sessionId);
   if (!s?.live?.cardio) return null;
   const now = Date.now();
@@ -197,6 +228,7 @@ export async function finishCardio(sessionId: string, distanceKm: number): Promi
   await db.sessions.update(sessionId, { live, updatedAt: now });
   return logSet(sessionId, exerciseId, {
     distanceKm,
+    reps,
     runSec: Math.round(c.run),
     walkSec: Math.round(c.walk),
     restSec: Math.round(c.rest),
@@ -204,16 +236,95 @@ export async function finishCardio(sessionId: string, distanceKm: number): Promi
   });
 }
 
-export async function deleteSet(id: string): Promise<void> {
-  await db.sets.update(id, { deleted: true, updatedAt: Date.now() });
+/**
+ * After a set is edited or deleted, re-check which sets are records for these exercises and
+ * fix each finished session's record count and XP by the difference (a set is worth XP.perSet,
+ * a record XP.perPR). Call inside a transaction on profile, sets and sessions.
+ */
+async function reconcileRecords(exerciseIds: string[], removed: WorkSet[] = []): Promise<void> {
+  const now = Date.now();
+  const measuresOf = measuresOfProfile(await getProfile());
+  const sets = await allSets();
+  const flags = prFlags(sets, measuresOf);
+  const delta = new Map<string, { xp: number; prs: number }>();
+  const add = (sid: string, xp: number, prs: number) => {
+    const d = delta.get(sid) ?? { xp: 0, prs: 0 };
+    delta.set(sid, { xp: d.xp + xp, prs: d.prs + prs });
+  };
+  const changed: WorkSet[] = [];
+  for (const s of sets) {
+    if (!exerciseIds.includes(s.exerciseId)) continue;
+    const isPR = flags.get(s.id) ?? false;
+    if (isPR !== s.isPR) {
+      changed.push({ ...s, isPR, updatedAt: now });
+      add(s.sessionId, isPR ? XP.perPR : -XP.perPR, isPR ? 1 : -1);
+    }
+  }
+  for (const r of removed) add(r.sessionId, -XP.perSet - (r.isPR ? XP.perPR : 0), r.isPR ? -1 : 0);
+  if (changed.length) await db.sets.bulkPut(changed);
+  for (const [sid, d] of delta) {
+    const sess = await db.sessions.get(sid);
+    // Only finished sessions hold XP; an active session counts its sets when it ends.
+    if (!sess || sess.deleted || sess.status !== 'done') continue;
+    await db.sessions.update(sid, { xpEarned: Math.max(0, sess.xpEarned + d.xp), prs: Math.max(0, sess.prs + d.prs), updatedAt: now });
+  }
 }
 
+export type SetValues = Pick<WorkSet, 'reps' | 'seconds' | 'weightKg' | 'distanceKm' | 'durationSec'>;
+
+/** Correct a logged set. Records and XP are re-checked. */
+export async function updateSet(id: string, values: SetValues): Promise<void> {
+  await db.transaction('rw', db.profile, db.sets, db.sessions, async () => {
+    const s = await db.sets.get(id);
+    if (!s || s.deleted) throw new Error('This set no longer exists.');
+    await db.sets.put({ ...s, ...values, updatedAt: Date.now() });
+    await reconcileRecords([s.exerciseId]);
+  });
+}
+
+export async function deleteSet(id: string): Promise<void> {
+  await db.transaction('rw', db.profile, db.sets, db.sessions, async () => {
+    const s = await db.sets.get(id);
+    if (!s || s.deleted) return;
+    await db.sets.update(id, { deleted: true, updatedAt: Date.now() });
+    await reconcileRecords([s.exerciseId], [s]);
+  });
+}
+
+/** Delete a session (active or finished) with all its sets. Its XP and anything only it unlocked go too. */
 export async function discardSession(id: string): Promise<void> {
   const now = Date.now();
-  await db.transaction('rw', db.sessions, db.sets, async () => {
+  await db.transaction('rw', db.profile, db.sessions, db.sets, async () => {
     await db.sessions.update(id, { status: 'done', deleted: true, live: null, updatedAt: now });
-    const sets = await db.sets.where('sessionId').equals(id).toArray();
+    const sets = (await db.sets.where('sessionId').equals(id).toArray()).filter((s) => !s.deleted);
     await db.sets.bulkPut(sets.map((s) => ({ ...s, deleted: true, updatedAt: now })));
+    // Later sets may now be records.
+    await reconcileRecords([...new Set(sets.map((s) => s.exerciseId))]);
+  });
+}
+
+export const deleteSession = discardSession;
+
+/** Correct a finished session: its date and start time, minutes and place. */
+export async function updateSession(id: string, patch: { startedAt?: number; activeSec?: number; restSec?: number; locationId?: string | null }): Promise<void> {
+  if (patch.startedAt !== undefined && (!Number.isFinite(patch.startedAt) || patch.startedAt > Date.now() + 60_000)) throw new Error('Pick a real date and time, not in the future.');
+  for (const v of [patch.activeSec, patch.restSec]) if (v !== undefined && (!Number.isFinite(v) || v < 0)) throw new Error('Minutes cannot be below 0.');
+  await db.transaction('rw', db.profile, db.sessions, db.sets, async () => {
+    const s = await db.sessions.get(id);
+    if (!s || s.deleted) throw new Error('This session no longer exists.');
+    if (s.status !== 'done') throw new Error('Finish the session before editing it.');
+    const now = Date.now();
+    const next: Session = { ...s, ...patch, updatedAt: now };
+    const shift = next.startedAt - s.startedAt;
+    next.endedAt = next.startedAt + (next.activeSec + next.restSec) * 1000;
+    await db.sessions.put(next);
+    // Moving a session to another day moves its sets with it (streaks and records follow the date).
+    if (shift) {
+      const sets = (await db.sets.where('sessionId').equals(id).toArray()).filter((x) => !x.deleted);
+      await db.sets.bulkPut(sets.map((x) => ({ ...x, at: x.at + shift, updatedAt: now })));
+      // The order of sets changed, so which ones are records may change too.
+      await reconcileRecords([...new Set(sets.map((x) => x.exerciseId))]);
+    }
   });
 }
 
@@ -258,6 +369,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     const prs = sessionSets.filter((x) => x.isPR).length;
 
     const allSessions = await db.sessions.toArray();
+    const measuresOf = measuresOfProfile(profile);
     const xpBefore = totalXp(allSessions);
     const targetBefore = habitTarget(allSessions, profile.habitBaseMin, profile.habitCapMin);
     const today = dayKey(s.startedAt);
@@ -272,7 +384,9 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     const finished: Session = { ...s, status: 'done', endedAt: endAt, activeSec, restSec, prs, live: null, updatedAt: now };
     const sessionsAfter = allSessions.map((x) => (x.id === id ? finished : x));
     const sets = await allSets();
-    const statsPre = buildStats(sessionsAfter, sets, xpBefore, now);
+    // Unlocks before this session: without its sets.
+    const unlockedBefore = unlockedFrom(buildStats(allSessions, sets.filter((x) => x.sessionId !== id), xpBefore, now, measuresOf), allSessions, profile.unlocked);
+    const statsPre = buildStats(sessionsAfter, sets, xpBefore, now, measuresOf);
     const streakBonus = firstToday ? Math.min(XP.streakCap, statsPre.streak * XP.perStreakDay) : 0;
     const parts = [
       { label: plural(sessionSets.length, 'set'), xp: sessionSets.length * XP.perSet },
@@ -294,28 +408,45 @@ export async function finishSession(id: string): Promise<SessionSummary> {
       challenge = null;
     }
 
-    const stats = buildStats(sessionsAfter, sets, xpBefore + xp, now);
-    const unlockedNow = newUnlocks(profile.unlocked, stats);
-    let unlocked = [...profile.unlocked, ...unlockedNow];
+    finished.xpEarned = xp;
+    const stats = buildStats(sessionsAfter, sets, xpBefore + xp, now, measuresOf);
+    const unlockedMid = unlockedFrom(stats, sessionsAfter, profile.unlocked);
 
-    // Mystery chest
+    // Mystery chest (surprises lean toward the goal profile)
     const equipment = await equipmentFor(s.locationId);
-    const chest = openChest(id, { unlocked, cosmetics: profile.cosmetics, hadPR: prs > 0, records: stats.records, available: availableExercises(unlocked, equipment) });
+    const owned = ownedEquipment(await db.locations.toArray());
+    const chest = openChest(id, {
+      unlocked: unlockedMid,
+      cosmetics: profile.cosmetics,
+      hadPR: prs > 0,
+      records: stats.records,
+      available: availableExercises(unlockedMid, equipment),
+      goals: profile.goals,
+      focus: profile.focus,
+      owned,
+    });
     let cosmetics = profile.cosmetics;
     if (chest.kind === 'xp') {
       xp += chest.xp;
       parts.push({ label: 'Mystery chest', xp: chest.xp });
     } else if (chest.kind === 'color') cosmetics = [...cosmetics, chest.colorId];
-    else if (chest.kind === 'secret') unlocked = [...unlocked, chest.exerciseId];
+    else if (chest.kind === 'secret') finished.chestSecret = chest.exerciseId;
     else if (chest.kind === 'challenge') challenge = chest.challenge;
 
     // Level-ups can open level-based unlocks too.
-    const more = newUnlocks(unlocked, buildStats(sessionsAfter, sets, xpBefore + xp, now));
-    unlocked = [...unlocked, ...more];
-
     finished.xpEarned = xp;
+    const sessionsFinal = allSessions.map((x) => (x.id === id ? finished : x));
+    const unlockedAfter = unlockedFrom(buildStats(sessionsFinal, sets, xpBefore + xp, now, measuresOf), sessionsFinal, profile.unlocked);
+    // Reveal only what the user can do with their equipment; the rest waits until they have it.
+    // `revealed` remembers what was shown, so a move earned earlier is revealed once its equipment is added.
+    const canDo = (x: string) => fitsEquipment(EXERCISE_BY_ID[x], owned);
+    const shownBefore = profile.revealed ?? unlockedBefore.filter(canDo);
+    const visibleAfter = unlockedAfter.filter(canDo);
+    const newly = visibleAfter.filter((x) => !shownBefore.includes(x));
+    const revealed = [...new Set([...shownBefore, ...visibleAfter])];
+
     await db.sessions.put(finished);
-    await db.profile.update('me', { unlocked, cosmetics, challenge, updatedAt: now });
+    await db.profile.update('me', { cosmetics, challenge, revealed, updatedAt: now });
 
     return {
       session: finished,
@@ -324,7 +455,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
       xpParts: parts.filter((p) => p.xp > 0),
       levelBefore: levelFromXp(xpBefore),
       levelAfter: levelFromXp(xpBefore + xp),
-      unlocked: [...unlockedNow, ...more, ...(chest.kind === 'secret' ? [chest.exerciseId] : [])],
+      unlocked: newly,
       chest,
       challengeDone,
       habitTargetMin: habitTarget(sessionsAfter, profile.habitBaseMin, profile.habitCapMin),
@@ -342,6 +473,18 @@ export async function addWeight(date: string, kg: number): Promise<void> {
   const same = (await db.weights.where('date').equals(date).toArray()).filter((w) => !w.deleted);
   const entry: WeightEntry = { id: same[0]?.id ?? uid(), date, kg, updatedAt: Date.now() };
   await db.weights.put(entry);
+}
+
+/** Correct a weigh-in. If the new date already has one, that one is replaced. */
+export async function updateWeight(id: string, date: string, kg: number): Promise<void> {
+  await db.transaction('rw', db.weights, async () => {
+    const w = await db.weights.get(id);
+    if (!w || w.deleted) throw new Error('This weigh-in no longer exists.');
+    const now = Date.now();
+    const clash = (await db.weights.where('date').equals(date).toArray()).filter((x) => !x.deleted && x.id !== id);
+    if (clash.length) await db.weights.bulkPut(clash.map((x) => ({ ...x, deleted: true, updatedAt: now })));
+    await db.weights.put({ ...w, date, kg, updatedAt: now });
+  });
 }
 
 export async function deleteWeight(id: string): Promise<void> {
@@ -398,10 +541,25 @@ export async function importAll(json: string): Promise<void> {
   // Old backups had profile.xp; XP is now derived from sessions, so the field is ignored.
 }
 
+/**
+ * Delete all training data (sessions, sets, weigh-ins) and game progress, keeping places,
+ * equipment, settings, goals and photos. Soft delete, so the cloud copy is deleted too.
+ */
+export async function resetTrainingData(): Promise<void> {
+  const now = Date.now();
+  await db.transaction('rw', [db.profile, db.sessions, db.sets, db.weights], async () => {
+    for (const table of [db.sessions, db.sets, db.weights] as const) {
+      const rows = ((await (table as any).toArray()) as { id: string; deleted?: boolean }[]).filter((r) => !r.deleted);
+      await (table as any).bulkPut(rows.map((r) => ({ ...r, deleted: true, ...(table === db.sessions ? { status: 'done', live: null } : {}), updatedAt: now })));
+    }
+    await db.profile.update('me', { unlocked: [...STARTER_IDS], cosmetics: ['ember'], color: 'ember', challenge: null, revealed: [...STARTER_IDS], resetAt: now, updatedAt: now });
+  });
+}
+
 /** Erase all MaxFit data on this device (used before another account signs in). */
 export async function wipeLocal(): Promise<void> {
-  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment, db.meta], async () => {
-    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
+  await db.transaction('rw', [db.profile, db.locations, db.sessions, db.sets, db.weights, db.equipment, db.meta, db.photos], async () => {
+    await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear(), db.photos.clear()]);
   });
   await ensureSeed();
 }

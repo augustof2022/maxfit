@@ -3,7 +3,13 @@ import { Stepper } from '../components/ui';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { CATEGORIES, EQUIPMENT, equipmentName, knownEquipment } from '../core/equipment';
 import type { Location } from '../core/types';
-import { deleteEquipment, exportAll, importAll, updateProfile, updateSettings, wipeLocal } from '../data/repo';
+import { deleteEquipment, exportAll, importAll, resetTrainingData, updateProfile, updateSettings, wipeLocal } from '../data/repo';
+import { confirmAsk } from '../components/Confirm';
+import { GoalPicker } from '../components/GoalPicker';
+import { Avatar, AVATAR_STYLES } from '../components/Avatar';
+import { COLORS, GOAL_TARGETS, goalFor, suggestedRestSec } from '../core/rules';
+import { saveFile } from '../lib/native';
+import { appVersion } from '../lib/update';
 import type { Game } from '../data/useGame';
 import { alarm, primeAudio } from '../lib/alarm';
 import { askPermission, isNative } from '../lib/notify';
@@ -15,9 +21,15 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
   const p = game.profile!;
   const s = p.settings;
   const [editing, setEditing] = useState<Partial<Location> | null>(null);
+  const [version, setVersion] = useState<string>('');
+  useEffect(() => {
+    void appVersion().then((v) => setVersion(`v${v.name}${v.build ? ` · build ${v.build}` : ''}`)).catch(() => undefined);
+  }, []);
+  const color = COLORS.find((c) => c.id === p.color)?.hex ?? '#ff7a1a';
+  const d = game.d!;
 
   return (
-    <div className="stack">
+    <div className="stack screen">
       <h1>Settings</h1>
 
       <section className="card stack">
@@ -26,6 +38,27 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
           Name (shown on Home)
           <input className="input" value={p.name} onChange={(e) => updateProfile({ name: e.target.value })} />
         </label>
+      </section>
+
+      <section className="card stack" aria-label="Goals">
+        <h2>Your goals</h2>
+        <GoalPicker key={`${(p.goals ?? []).join()}|${(p.focus ?? []).join()}`} goals={p.goals ?? []} focus={p.focus ?? []} onSaved={() => toast('Goals saved')} />
+      </section>
+
+      <section className="card stack" aria-label="Avatar style">
+        <h2>Avatar style</h2>
+        <p className="small muted">Three looks. Same moves: it trains when you train.</p>
+        <div className="seg" role="radiogroup" aria-label="Avatar style">
+          {AVATAR_STYLES.map((st) => (
+            <button key={st.id} role="radio" aria-checked={(p.avatarStyle ?? 'athlete') === st.id} className={`card flat stack style-pick ${(p.avatarStyle ?? 'athlete') === st.id ? 'on' : ''}`} onClick={() => updateProfile({ avatarStyle: st.id })}>
+              <Avatar stage={d.stage} gear={d.gear} color={color} size={86} style={st.id} action="demo" />
+              <b className="small">{st.name}</b>
+              <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                {st.blurb}
+              </span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="card stack" aria-label="Locations">
@@ -71,7 +104,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
                   style={{ minWidth: 44, padding: '4px 10px' }}
                   aria-label={`Remove ${e.name} from library`}
                   onClick={async () => {
-                    if (confirm(`Remove "${e.name}" from your library? It is also removed from every place that has it.`)) await deleteEquipment(e.id);
+                    if (await confirmAsk({ title: `Remove "${e.name}"?`, body: 'It is also removed from every place that has it.', ok: 'Remove', danger: true })) await deleteEquipment(e.id);
                   }}
                 >
                   ✕
@@ -85,6 +118,26 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         <h2>Rest alarm</h2>
         <Stepper label="Alarm when rest is longer than" unit="sec" value={s.restLimitSec} step={15} min={15} onChange={(v) => updateSettings({ restLimitSec: Math.max(15, v) })} />
         <p className="small muted">For muscle growth, a common guide is 1–2 minutes between sets (ACSM). Start at 90 seconds.</p>
+        {(() => {
+          const sug = suggestedRestSec(p.goals ?? []);
+          const g = goalFor(null, p.goals ?? []);
+          if (!sug || !g || sug === s.restLimitSec) return null;
+          return (
+            <div className="row between banner small">
+              <span>
+                For your goal ({GOAL_TARGETS[g].label}): rest about <b>{sug} s</b>.
+              </span>
+              <button
+                className="btn ghost icon-btn"
+                onClick={async () => {
+                  if (await confirmAsk({ title: `Set the rest alarm to ${sug} s?`, body: `Now ${s.restLimitSec} s. You can change it back any time.`, ok: 'Apply' })) await updateSettings({ restLimitSec: sug });
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          );
+        })()}
         <Toggle label="Sound" on={s.sound} set={(v) => updateSettings({ sound: v })} />
         <Toggle label="Vibrate" on={s.vibrate} set={(v) => updateSettings({ vibrate: v })} />
         <button
@@ -158,12 +211,12 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
           <button
             className="btn ghost grow"
             onClick={async () => {
-              const blob = new Blob([await exportAll()], { type: 'application/json' });
-              const a = document.createElement('a');
-              a.href = URL.createObjectURL(blob);
-              a.download = `maxfit-backup-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(a.href);
+              try {
+                const blob = new Blob([await exportAll()], { type: 'application/json' });
+                toast(await saveFile(blob, `maxfit-backup-${new Date().toISOString().slice(0, 10)}.json`, 'downloads'));
+              } catch (err) {
+                toast((err as Error).message);
+              }
             }}
           >
             Export
@@ -177,7 +230,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
               onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (!f) return;
-                if (!confirm('Replace all data on this device with the backup?')) return;
+                if (!(await confirmAsk({ title: 'Restore this backup?', body: 'All data on this device is replaced with the backup.', ok: 'Restore', danger: true }))) return;
                 try {
                   await importAll(await f.text());
                   toast('Backup restored');
@@ -190,13 +243,29 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         </div>
       </section>
 
-      <section className="card stack" aria-label="Erase">
-        <h2>Erase this device</h2>
-        <p className="small muted">Removes all MaxFit data from this phone (cloud data stays). Use before someone else signs in here. Export a backup first.</p>
+      <section className="card stack" aria-label="Delete test data">
+        <h2>Delete my test data</h2>
+        <p className="small muted">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter moves). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
         <button
           className="btn danger"
           onClick={async () => {
-            if (!confirm('Erase ALL MaxFit data on this device? This cannot be undone.')) return;
+            if (!(await confirmAsk({ title: 'Delete all training data?', body: `${d.stats.sessions} sessions, their sets, and ${game.weights.length} weigh-ins. Your level and unlocks start again.`, ok: 'Continue', danger: true }))) return;
+            if (!(await confirmAsk({ title: 'Are you sure?', body: 'This cannot be undone. Export a backup first if you may want it back.', ok: 'Delete everything', danger: true }))) return;
+            await resetTrainingData();
+            toast('Training data deleted. Fresh start!');
+          }}
+        >
+          Delete test data
+        </button>
+      </section>
+
+      <section className="card stack" aria-label="Erase">
+        <h2>Erase this device</h2>
+        <p className="small muted">Removes all MaxFit data from this phone (cloud data stays). Progress photos are only on this phone and are deleted for good: save the ones you want to your gallery first. Use before someone else signs in here. Export a backup first.</p>
+        <button
+          className="btn danger"
+          onClick={async () => {
+            if (!(await confirmAsk({ title: 'Erase ALL MaxFit data on this device?', body: 'This cannot be undone. Cloud data stays, but progress photos (phone only) are deleted for good.', ok: 'Erase', danger: true }))) return;
             await wipeLocal();
             toast('This device was erased');
           }}
@@ -206,10 +275,10 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
       </section>
 
       <p className="tiny muted" style={{ textAlign: 'center' }}>
-        MaxFit v0.1 · Train like a game
+        MaxFit {version} · Train like a game
       </p>
 
-      {editing && <PlaceEditor loc={editing} customEquipment={game.customEquipment} unlocked={p.unlocked} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
+      {editing && <PlaceEditor loc={editing} customEquipment={game.customEquipment} unlocked={d.unlockedAll} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
     </div>
   );
 }

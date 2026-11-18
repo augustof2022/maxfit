@@ -2,7 +2,8 @@
 // so every rule can be unit-tested. See docs/GAME-DESIGN.md for the "why".
 
 import { EXERCISE_BY_ID, EXERCISES, SECRET_IDS } from './exercises';
-import type { Challenge, EquipmentId, Exercise, Session, UnlockRule, WorkSet } from './types';
+import { beats, fmtValues, hasValue, lowerWins, mainMeasure, MEASURES, measuresFor, measureValue } from './measures';
+import type { Challenge, EquipmentId, Exercise, Focus, Goal, Measure, Session, UnlockRule, WorkSet } from './types';
 
 // ---------- dates ----------
 
@@ -68,8 +69,11 @@ export function bestStreak(sessions: Session[]): number {
 
 export interface ExRecord {
   exerciseId: string;
-  /** The single number used for unlocks and "beat this". reps, seconds, kg or km. */
+  /** Best value of the exercise's main measure (reps, seconds, km or kg). Used for unlocks and challenges. */
   best: number;
+  /** Best value of each measure on its own. */
+  bests: Partial<Record<Measure, number>>;
+  /** The benchmark ("the record"): the first set, then each set that beat it (rule A). */
   bestSet: WorkSet | null;
   last: WorkSet | null;
   count: number;
@@ -77,31 +81,12 @@ export interface ExRecord {
   bestPace: number | null;
 }
 
+/** Which measures to use for an exercise (the user's choice or the default). */
+export type MeasuresOf = (ex: Exercise) => Measure[];
+export const defaultMeasuresOf: MeasuresOf = (ex) => ex.measures;
+
 function liveSets(sets: WorkSet[]): WorkSet[] {
   return sets.filter((s) => !s.deleted).sort((a, b) => a.at - b.at);
-}
-
-/** The value a set scores for its exercise's metric. */
-export function setValue(ex: Exercise, s: WorkSet): number {
-  switch (ex.metric) {
-    case 'reps':
-      return s.reps ?? 0;
-    case 'time':
-      return s.seconds ?? 0;
-    case 'weight_reps':
-      return s.weightKg ?? 0;
-    case 'distance':
-      return s.distanceKm ?? 0;
-  }
-}
-
-/** Is set `a` better than set `b` for this exercise? Weight: heavier wins, then more reps. */
-export function betterThan(ex: Exercise, a: WorkSet, b: WorkSet | null): boolean {
-  if (!b) return setValue(ex, a) > 0;
-  const va = setValue(ex, a);
-  const vb = setValue(ex, b);
-  if (ex.metric === 'weight_reps' && va === vb) return (a.reps ?? 0) > (b.reps ?? 0);
-  return va > vb;
 }
 
 export function pace(s: WorkSet): number | null {
@@ -109,21 +94,42 @@ export function pace(s: WorkSet): number | null {
   return s.durationSec / 60 / s.distanceKm;
 }
 
-export function computeRecords(sets: WorkSet[]): Map<string, ExRecord> {
+export function computeRecords(sets: WorkSet[], measuresOf: MeasuresOf = defaultMeasuresOf): Map<string, ExRecord> {
   const out = new Map<string, ExRecord>();
   for (const s of liveSets(sets)) {
     const ex = EXERCISE_BY_ID[s.exerciseId];
     if (!ex) continue;
-    const r: ExRecord = out.get(s.exerciseId) ?? { exerciseId: s.exerciseId, best: 0, bestSet: null, last: null, count: 0, bestPace: null };
+    const ms = measuresOf(ex);
+    const r: ExRecord = out.get(s.exerciseId) ?? { exerciseId: s.exerciseId, best: 0, bests: {}, bestSet: null, last: null, count: 0, bestPace: null };
     r.count++;
     r.last = s;
-    if (betterThan(ex, s, r.bestSet)) {
-      r.bestSet = s;
-      r.best = setValue(ex, s);
+    for (const m of MEASURES) {
+      const v = measureValue(s, m.id);
+      if (v <= 0) continue;
+      const cur = r.bests[m.id];
+      if (cur === undefined || (lowerWins(m.id) ? v < cur : v > cur)) r.bests[m.id] = v;
     }
+    r.best = r.bests[mainMeasure(ex)] ?? 0;
+    if (r.bestSet ? beats(ms, s, r.bestSet) : hasValue(ms, s)) r.bestSet = s;
     const p = pace(s);
     if (p !== null && (r.bestPace === null || p < r.bestPace)) r.bestPace = p;
     out.set(s.exerciseId, r);
+  }
+  return out;
+}
+
+/** Which sets are records (beat the benchmark before them). Used again after an edit or delete. */
+export function prFlags(sets: WorkSet[], measuresOf: MeasuresOf = defaultMeasuresOf): Map<string, boolean> {
+  const bench = new Map<string, WorkSet>();
+  const out = new Map<string, boolean>();
+  for (const s of liveSets(sets)) {
+    const ex = EXERCISE_BY_ID[s.exerciseId];
+    if (!ex) continue;
+    const ms = measuresOf(ex);
+    const b = bench.get(s.exerciseId);
+    const isPR = !!b && beats(ms, s, b);
+    out.set(s.id, isPR);
+    if (b ? isPR : hasValue(ms, s)) bench.set(s.exerciseId, s);
   }
   return out;
 }
@@ -138,36 +144,110 @@ export interface Target {
 }
 
 export const REP_RANGE = { low: 8, high: 12 };
+
+/**
+ * Targets per goal for resistance moves (exercise-scientist, round 2; grades and sources in
+ * docs/research/EXERCISE-LADDER.md section C). Muscle/strength reps, sets and rest: grade A.
+ * Stamina and lose_weight numbers, set counts and the 25-rep cap: [Design choice].
+ */
+export const GOAL_TARGETS: Record<Goal, { low: number; high: number; sets: number; restSec: number; label: string }> = {
+  strength: { low: 5, high: 8, sets: 3, restSec: 120, label: 'Get stronger' },
+  muscle: { low: 8, high: 12, sets: 3, restSec: 90, label: 'Build muscle' },
+  lean: { low: 8, high: 12, sets: 3, restSec: 90, label: 'Get lean' },
+  stamina: { low: 15, high: 25, sets: 2, restSec: 60, label: 'Stamina' },
+  lose_weight: { low: 10, high: 15, sets: 2, restSec: 60, label: 'Lose weight' },
+};
+export const GOAL_ORDER: Goal[] = ['strength', 'muscle', 'lean', 'stamina', 'lose_weight'];
+
+/**
+ * Which goal sets the numbers for this exercise: the first picked goal (in GOAL_ORDER) that the exercise
+ * also serves; else the first picked goal; else none (default 8-12 reps, 90 s). Research, round 2, section C.
+ */
+export function goalFor(ex: Exercise | null, goals: Goal[] = []): Goal | null {
+  const picked = GOAL_ORDER.filter((g) => goals.includes(g));
+  if (!picked.length) return null;
+  return (ex && picked.find((g) => ex.goals.includes(g))) ?? picked[0];
+}
+
+/** Suggested rest between sets for the whole profile (its first goal in GOAL_ORDER). */
+export function suggestedRestSec(goals: Goal[] = []): number | null {
+  const g = goalFor(null, goals);
+  return g ? GOAL_TARGETS[g].restSec : null;
+}
 export const WEIGHT_STEP_KG = 2.5;
 
-export function nextTarget(ex: Exercise, rec: ExRecord | undefined): Target {
+function asSet(t: Target): Partial<WorkSet> {
+  return { reps: t.reps, seconds: t.seconds, weightKg: t.weightKg, distanceKm: t.distanceKm };
+}
+
+/**
+ * The number to beat. Under rule A a target raises ONE measure a little and keeps the others,
+ * so it always counts as a beat. Weight + reps: add reps up to the top of the range, then add
+ * weight and keep the reps (see docs/RESEARCH.md, progression).
+ */
+export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[] = ex.measures, goals: Goal[] = []): Target {
   const b = rec?.bestSet;
-  switch (ex.metric) {
-    case 'reps': {
-      const reps = b ? (b.reps ?? 0) + 1 : 5;
-      return { reps, label: b ? `Beat ${b.reps}: do ${reps}` : 'First time: try 5, or as many as you can' };
-    }
-    case 'time': {
-      const seconds = b ? (b.seconds ?? 0) + 5 : 20;
-      return { seconds, label: b ? `Beat ${b.seconds}s: hold ${seconds}s` : 'First time: try 20 seconds' };
-    }
-    case 'weight_reps': {
-      if (!b) return { weightKg: 0, reps: REP_RANGE.low, label: `First time: pick a weight you can lift ${REP_RANGE.low}-${REP_RANGE.high} times` };
-      // Double progression: add reps up to the top of the range, then add weight and drop back.
-      if ((b.reps ?? 0) >= REP_RANGE.high) {
-        const w = round1((b.weightKg ?? 0) + WEIGHT_STEP_KG);
-        return { weightKg: w, reps: REP_RANGE.low, label: `Level up: ${w} kg x ${REP_RANGE.low}` };
-      }
-      const reps = (b.reps ?? 0) + 1;
-      return { weightKg: b.weightKg, reps, label: `Beat ${b.weightKg} kg x ${b.reps}: do ${reps} reps` };
-    }
-    case 'distance': {
-      if (!b) return { distanceKm: 1, label: 'First time: run or walk 1 km' };
-      const d = round1((b.distanceKm ?? 0) + 0.1);
-      const p = rec?.bestPace;
-      return { distanceKm: d, label: `Beat ${b.distanceKm} km: go ${d} km${p ? ` or beat ${fmtPace(p)}/km` : ''}` };
-    }
+  const has = (m: Measure) => ms.includes(m);
+  const g = goalFor(ex, goals);
+  const RANGE = g ? { low: GOAL_TARGETS[g].low, high: GOAL_TARGETS[g].high } : REP_RANGE;
+  if (!b) {
+    const t: Target = { label: '' };
+    if (has('weight')) t.weightKg = 0;
+    if (has('reps')) t.reps = has('weight') ? RANGE.low : 5;
+    if (has('distance')) t.distanceKm = 1;
+    if (has('time') && !has('distance')) t.seconds = 20;
+    const bits: string[] = [];
+    if (has('speed')) bits.push('go all out once and log your time; that is the time to beat');
+    if (has('weight')) bits.push(`pick a weight you can lift ${RANGE.low}-${RANGE.high} times`);
+    else if (has('reps')) bits.push('try 5, or as many as you can with good form');
+    if (has('distance')) bits.push('go 1 km, run or walk');
+    else if (has('time')) bits.push('try 20 seconds');
+    t.label = `First time: ${bits.join('; ')}`;
+    return t;
   }
+  const t: Target = { label: '' };
+  if (has('reps')) t.reps = b.reps ?? 0;
+  if (has('weight')) t.weightKg = b.weightKg ?? 0;
+  if (has('distance')) t.distanceKm = b.distanceKm ?? 0;
+  if (has('time')) t.seconds = measureValue(b, 'time');
+  if (has('speed')) t.seconds = measureValue(b, 'speed');
+  let how: string;
+  if (has('weight') && has('reps')) {
+    if ((b.reps ?? 0) >= RANGE.high) {
+      t.weightKg = round1((b.weightKg ?? 0) + WEIGHT_STEP_KG);
+      how = `level up: add ${WEIGHT_STEP_KG} kg, keep ${t.reps} reps`;
+    } else {
+      t.reps = (b.reps ?? 0) + 1;
+      how = 'one more rep';
+    }
+  } else if (has('speed')) {
+    // Faster wins: a small cut. Short sprints in tenths; long time trials in whole seconds.
+    const cur = measureValue(b, 'speed');
+    const step = cur < 60 ? 0.2 : cur < 600 ? 2 : 10;
+    // A tiny record (likely a typo) cannot be beaten by a fixed step: use 5% of it instead.
+    t.seconds = cur - step > 0 ? Math.round((cur - step) * 10) / 10 : Math.max(0.01, Math.round(cur * 0.95 * 100) / 100);
+    how = `${step} s faster${has('distance') ? ', same distance or more' : ''}`;
+  } else if (has('distance')) {
+    t.distanceKm = round1((b.distanceKm ?? 0) + 0.1);
+    how = has('time') ? 'go 0.1 km farther, for at least the same time' : 'go 0.1 km farther';
+  } else if (has('reps')) {
+    t.reps = (b.reps ?? 0) + 1;
+    how = 'one more rep';
+  } else if (has('time')) {
+    t.seconds = (t.seconds ?? 0) + 5;
+    how = '5 seconds longer';
+  } else {
+    t.weightKg = round1((b.weightKg ?? 0) + WEIGHT_STEP_KG);
+    how = `add ${WEIGHT_STEP_KG} kg`;
+  }
+  const others = ms.length > 1 ? ' Keep the other numbers at least the same.' : '';
+  t.label = `Beat ${fmtValues(ms, b)}: ${how} → ${fmtValues(ms, asSet(t))}.${others}`;
+  return t;
+}
+
+/** Short "number to beat" for the big tile. */
+export function fmtTarget(ms: Measure[], t: Target): string {
+  return fmtValues(ms, asSet(t), true);
 }
 
 export function round1(n: number): number {
@@ -238,14 +318,14 @@ export function avatarStage(level: number): number {
   return i;
 }
 
-/** Gear the avatar wears, earned by the number of unlocked exercises. */
+/** Gear the avatar wears, earned by the number of unlocked exercises. Day 1 has 4 starters (2026-11-18: +2 to every step). */
 export const GEAR = [
-  { unlocks: 4, id: 'headband', name: 'Headband' },
-  { unlocks: 6, id: 'wristbands', name: 'Wristbands' },
-  { unlocks: 9, id: 'belt', name: 'Lifting belt' },
-  { unlocks: 13, id: 'cape', name: 'Cape' },
-  { unlocks: 18, id: 'aura', name: 'Power aura' },
-  { unlocks: 25, id: 'crown', name: 'Crown' },
+  { unlocks: 6, id: 'headband', name: 'Headband' },
+  { unlocks: 8, id: 'wristbands', name: 'Wristbands' },
+  { unlocks: 11, id: 'belt', name: 'Lifting belt' },
+  { unlocks: 15, id: 'cape', name: 'Cape' },
+  { unlocks: 20, id: 'aura', name: 'Power aura' },
+  { unlocks: 27, id: 'crown', name: 'Crown' },
 ];
 
 export function gearFor(unlockCount: number): string[] {
@@ -263,7 +343,7 @@ export interface GameStats {
   records: Map<string, ExRecord>;
 }
 
-export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now: number): GameStats {
+export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now: number, measuresOf: MeasuresOf = defaultMeasuresOf): GameStats {
   const done = doneSessions(sessions);
   return {
     streak: currentStreak(sessions, now),
@@ -271,8 +351,17 @@ export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now
     sessions: done.length,
     level: levelFromXp(xp),
     totalMinutes: Math.floor(done.reduce((t, s) => t + s.activeSec + s.restSec, 0) / 60),
-    records: computeRecords(sets),
+    records: computeRecords(sets, measuresOf),
   };
+}
+
+/** Everything derived from the data in one call: XP, stats and unlocks. */
+export function deriveGame(profile: { unlocked: string[]; exerciseMeasures?: Record<string, Measure[]> }, sessions: Session[], sets: WorkSet[], now: number) {
+  const measuresOf: MeasuresOf = (ex) => measuresFor(ex, profile.exerciseMeasures);
+  const xp = totalXp(sessions);
+  const stats = buildStats(sessions, sets, xp, now, measuresOf);
+  const unlocked = unlockedFrom(stats, sessions, profile.unlocked);
+  return { xp, stats, unlocked, measuresOf };
 }
 
 /** Progress toward a rule as current / needed (needed > 0). Unlocks use bestStreak so a rule met once stays met. */
@@ -290,8 +379,14 @@ export function ruleProgress(rule: UnlockRule, st: GameStats): { current: number
       return { current: st.level, needed: rule.level };
     case 'totalMinutes':
       return { current: st.totalMinutes, needed: rule.minutes };
-    case 'record':
-      return { current: st.records.get(rule.exerciseId)?.best ?? 0, needed: rule.value };
+    case 'record': {
+      const ex = EXERCISE_BY_ID[rule.exerciseId];
+      const m = rule.measure ?? (ex ? mainMeasure(ex) : 'reps');
+      const best = st.records.get(rule.exerciseId)?.bests[m];
+      // Faster time: met when the best time is at or under the value (progress = value / best).
+      if (lowerWins(m)) return best ? { current: Math.min(rule.value, (rule.value * rule.value) / best), needed: rule.value } : { current: 0, needed: rule.value };
+      return { current: best ?? 0, needed: rule.value };
+    }
     case 'all': {
       // progress = the weakest part
       let worst = { current: 1, needed: 1 };
@@ -320,7 +415,11 @@ export function ruleMet(rule: UnlockRule, st: GameStats): boolean {
   return p.current >= p.needed;
 }
 
-export function describeRule(rule: UnlockRule): string {
+/**
+ * The unlock rule in words. `known(id)` = may this exercise be named? Locked ones are surprises
+ * (Renz, 2026-11-18), so they show as "a hidden move".
+ */
+export function describeRule(rule: UnlockRule, known: (id: string) => boolean = () => true): string {
   switch (rule.type) {
     case 'start':
       return 'Ready from day 1';
@@ -336,32 +435,60 @@ export function describeRule(rule: UnlockRule): string {
       return `Train ${rule.minutes} minutes in total`;
     case 'record': {
       const ex = EXERCISE_BY_ID[rule.exerciseId];
-      const unit = ex?.metric === 'time' ? 's' : ex?.metric === 'distance' ? ' km' : ex?.metric === 'weight_reps' ? ' kg' : ' reps';
-      return `${ex?.name ?? rule.exerciseId} record: ${rule.value}${unit}`;
+      const m = rule.measure ?? (ex ? mainMeasure(ex) : 'reps');
+      const name = known(rule.exerciseId) ? (ex?.name ?? rule.exerciseId) : 'a hidden move';
+      return `${name}: ${fmtValues([m], { reps: rule.value, seconds: rule.value, distanceKm: rule.value, weightKg: rule.value })} in one set`;
     }
     case 'all':
-      return rule.rules.map(describeRule).join(' + ');
+      return rule.rules.map((r) => describeRule(r, known)).join(' + ');
     case 'any':
-      return rule.rules.map(describeRule).join(' OR ');
+      return rule.rules.map((r) => describeRule(r, known)).join(' OR ');
   }
 }
 
-/** Exercises whose rule is met now but are not yet in `unlocked`. Unlocks never re-lock. */
+/**
+ * Every unlocked exercise, worked out from the data: starters, every ladder rule met by the
+ * sessions and sets that exist now, and secrets from chests of sessions that still exist.
+ * So deleting wrong data locks again what only that data earned (Renz, 2026-11-18).
+ * `legacy` = secrets found before this rule (kept, as their session is not known).
+ */
+export function unlockedFrom(st: GameStats, sessions: Session[], legacy: string[] = []): string[] {
+  const have = new Set<string>();
+  for (const e of EXERCISES) if (e.unlock.type === 'start' || (e.unlock.type !== 'secret' && ruleMet(e.unlock, st))) have.add(e.id);
+  for (const s of doneSessions(sessions)) if (s.chestSecret) have.add(s.chestSecret);
+  for (const id of legacy) if (SECRET_IDS.includes(id)) have.add(id);
+  return EXERCISES.filter((e) => have.has(e.id)).map((e) => e.id);
+}
+
+/** Exercises whose rule is met now but are not yet in `unlocked`. */
 export function newUnlocks(unlocked: string[], st: GameStats): string[] {
   const have = new Set(unlocked);
   return EXERCISES.filter((e) => !have.has(e.id) && e.unlock.type !== 'secret' && ruleMet(e.unlock, st)).map((e) => e.id);
 }
 
-/** Locked, non-secret exercises closest to unlocking first. */
-export function nextUnlockHints(unlocked: string[], st: GameStats, limit = 3) {
+/** Locked, non-secret exercises closest to unlocking first. `canDo` = only ones the user has equipment for. */
+export function nextUnlockHints(unlocked: string[], st: GameStats, limit = 3, canDo: (e: Exercise) => boolean = () => true) {
   const have = new Set(unlocked);
-  return EXERCISES.filter((e) => !have.has(e.id) && e.unlock.type !== 'secret')
+  return EXERCISES.filter((e) => !have.has(e.id) && e.unlock.type !== 'secret' && canDo(e))
     .map((e) => {
       const p = ruleProgress(e.unlock, st);
-      return { exercise: e, ...p, ratio: Math.min(1, p.current / p.needed), text: describeRule(e.unlock) };
+      return { exercise: e, ...p, ratio: Math.min(1, p.current / p.needed), text: describeRule(e.unlock, (id) => have.has(id)) };
     })
     .sort((a, b) => b.ratio - a.ratio || a.exercise.tier - b.exercise.tier)
     .slice(0, limit);
+}
+
+/**
+ * What the user sees as unlocked: earned AND (doable with their equipment OR already shown to them).
+ * `revealed` undefined = an app version before the reveal list: then everything doable counts as shown.
+ */
+export function visibleUnlocks(unlockedAll: string[], canDo: (e: Exercise) => boolean, revealed?: string[]): string[] {
+  return unlockedAll.filter((id) => canDo(EXERCISE_BY_ID[id]) || (revealed ?? []).includes(id));
+}
+
+/** Every equipment id found in the user's places: what they own, somewhere. */
+export function ownedEquipment(places: { equipment: EquipmentId[]; deleted?: boolean }[]): EquipmentId[] {
+  return [...new Set(places.filter((p) => !p.deleted).flatMap((p) => p.equipment))];
 }
 
 /** Can this exercise be done with this equipment? */
@@ -432,10 +559,24 @@ export function habitTarget(sessions: Session[], base = 10, cap = 45, step = 5, 
 /** First 10 sessions = starter mode: a short plan of few exercises to build the habit. */
 export const STARTER_SESSIONS = 10;
 
-export function starterPlan(available: Exercise[], doneCount: number): { exerciseId: string; sets: number }[] {
+export function starterPlan(available: Exercise[], doneCount: number, goals: Goal[] = [], focus: Focus[] = []): { exerciseId: string; sets: number }[] {
   if (doneCount >= STARTER_SESSIONS) return [];
-  const picks = [...available].sort((a, b) => b.tier - a.tier).slice(0, 3);
-  return picks.map((e) => ({ exerciseId: e.id, sets: e.metric === 'distance' ? 1 : 2 }));
+  return suggestedPlan(available, goals, focus, 3).map((p) => ({ ...p, sets: p.sets === 1 ? 1 : 2 }));
+}
+
+/**
+ * A short plan that fits the goal profile: best matches first, then the newest (highest tier) moves.
+ * At most one cardio (distance) move, so a plan is not just running.
+ */
+export function suggestedPlan(available: Exercise[], goals: Goal[] = [], focus: Focus[] = [], n = 4): { exerciseId: string; sets: number }[] {
+  const sorted = [...available].sort((a, b) => profileScore(b, goals, focus) - profileScore(a, goals, focus) || b.tier - a.tier);
+  const out: Exercise[] = [];
+  for (const e of sorted) {
+    if (out.length >= n) break;
+    if (e.measures.includes('distance') && out.some((x) => x.measures.includes('distance'))) continue;
+    out.push(e);
+  }
+  return out.map((e) => ({ exerciseId: e.id, sets: e.measures.includes('distance') ? 1 : 3 }));
 }
 
 // ---------- BMI ----------
@@ -482,11 +623,34 @@ export type ChestReward =
   | { kind: 'secret'; exerciseId: string }
   | { kind: 'challenge'; challenge: Challenge };
 
-export function openChest(seed: string, ctx: { unlocked: string[]; cosmetics: string[]; hadPR: boolean; records: Map<string, ExRecord>; available: Exercise[] }): ChestReward {
+/** How well an exercise fits the user's goals and focus. 0 = no match. Focus counts double. */
+export function profileScore(ex: Exercise, goals: Goal[] = [], focus: Focus[] = []): number {
+  return ex.focus.filter((f) => focus.includes(f)).length * 2 + ex.goals.filter((g) => goals.includes(g)).length;
+}
+
+/** Pick one item, more likely the better its weight (all weights > 0). */
+function weightedPick<T>(items: T[], weight: (x: T) => number, rnd: () => number): T {
+  const total = items.reduce((t, x) => t + weight(x), 0);
+  let r = rnd() * total;
+  for (const x of items) {
+    r -= weight(x);
+    if (r < 0) return x;
+  }
+  return items[items.length - 1];
+}
+
+export function openChest(
+  seed: string,
+  ctx: { unlocked: string[]; cosmetics: string[]; hadPR: boolean; records: Map<string, ExRecord>; available: Exercise[]; goals?: Goal[]; focus?: Focus[]; owned?: EquipmentId[] },
+): ChestReward {
   const rnd = seededRandom(seed);
-  const lockedSecrets = SECRET_IDS.filter((id) => !ctx.unlocked.includes(id));
+  // A secret only after its base move, and only if the user has the equipment for it (Renz, 2026-11-18).
+  const lockedSecrets = SECRET_IDS.filter((id) => {
+    const e = EXERCISE_BY_ID[id];
+    return !ctx.unlocked.includes(id) && (!e.requires || ctx.unlocked.includes(e.requires)) && (!ctx.owned || fitsEquipment(e, ctx.owned));
+  });
   const lockedColors = COLORS.filter((c) => c.id !== 'ember' && !ctx.cosmetics.includes(c.id));
-  const challengeable = ctx.available.filter((e) => (ctx.records.get(e.id)?.best ?? 0) > 0 && e.metric !== 'weight_reps');
+  const challengeable = ctx.available.filter((e) => (ctx.records.get(e.id)?.best ?? 0) > 0 && mainMeasure(e) !== 'weight');
 
   const roll = rnd();
   // A PR makes a "special" reward more likely: XP only on a low roll.
@@ -496,15 +660,27 @@ export function openChest(seed: string, ctx: { unlocked: string[]; cosmetics: st
   if (roll < xpChance + 0.45 && challengeable.length) {
     const e = challengeable[Math.floor(rnd() * challengeable.length)];
     const best = ctx.records.get(e.id)!.best;
-    const bump = e.metric === 'time' ? 10 : e.metric === 'distance' ? 0.3 : 2;
+    const m = mainMeasure(e);
+    // Faster time: the challenge is a LOWER time (about 3% faster), never a slower one.
+    if (lowerWins(m)) return { kind: 'challenge', challenge: { exerciseId: e.id, target: Math.max(0.1, round1(best * 0.97)), xp: 100 } };
+    const bump = m === 'time' ? 10 : m === 'distance' ? 0.3 : 2;
     return { kind: 'challenge', challenge: { exerciseId: e.id, target: round1(best + bump), xp: 100 } };
   }
-  if (lockedSecrets.length) return { kind: 'secret', exerciseId: lockedSecrets[Math.floor(rnd() * lockedSecrets.length)] };
+  // Surprises lean toward the goal profile: a matching secret is up to several times more likely.
+  if (lockedSecrets.length) {
+    const pick = weightedPick(lockedSecrets, (id) => 1 + 2 * profileScore(EXERCISE_BY_ID[id], ctx.goals, ctx.focus), rnd);
+    return { kind: 'secret', exerciseId: pick };
+  }
   return { kind: 'xp', xp: 50 };
 }
 
 export function challengeMet(ch: Challenge, sets: WorkSet[]): boolean {
   const ex = EXERCISE_BY_ID[ch.exerciseId];
   if (!ex) return false;
-  return sets.some((s) => s.exerciseId === ch.exerciseId && !s.deleted && setValue(ex, s) >= ch.target);
+  const m = mainMeasure(ex);
+  return sets.some((s) => {
+    if (s.exerciseId !== ch.exerciseId || s.deleted) return false;
+    const v = measureValue(s, m);
+    return lowerWins(m) ? v > 0 && v <= ch.target : v >= ch.target;
+  });
 }

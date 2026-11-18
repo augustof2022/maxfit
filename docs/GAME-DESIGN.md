@@ -62,7 +62,7 @@ movement, so strength comes before the harder move. Exercise order to be confirm
 ## Records and "beat this"
 
 See `.claude/skills/progressive-overload/SKILL.md`. Reps +1, holds +5 s, weights by double
-progression (8→12 reps, then +2.5 kg), distance +0.1 km or a faster pace.
+progression (8→12 reps, then +2.5 kg), distance +0.1 km (same or more time). Note: with rule A and raw time, a faster run over the same distance is not a record and a slower one is — open question Q19 (pace) for Renz.
 
 ## XP and levels
 
@@ -133,3 +133,61 @@ bonus XP, a new avatar colour, a **secret exercise**, or a **surprise challenge*
 
 Before rebalancing, the sim showed the goal reaching 45 min in 25 days and Champion at day 23,
 and casual players could never unlock streak-only moves. All three were fixed.
+
+## Changes 2026-11-18 (Renz's 8 requests)
+
+- **Science-backed ladder (55 moves, 17 new).** Built by `exercise-scientist` from movement-pattern
+  progressions (easier version → harder version). Evidence, sources and grades: `docs/research/EXERCISE-LADDER.md`.
+  Day 1 = 4 home moves with no equipment: incline push-up, push-up, run / walk, run in place.
+  Session counts in rules stay **[Design choice]** (pacing).
+- **Measures.** Each exercise has default measures (main one first); the user can pick any of
+  reps / time / distance / weight per exercise (Train → "Measured by", or Progress → 📏).
+  **Beat rule A (Renz):** a new record = at least one tracked number up, none down. Targets always
+  raise one number and keep the others, so following the target is always a beat.
+  Weight + reps: +1 rep up to 12, then +2.5 kg at the same reps. Unlock rules use the default main
+  measure, so changing measures never blocks an unlock.
+- **Unlocks come from the data.** Unlocked = starters + every rule met by the sessions and sets that
+  exist now + chest secrets of sessions that still exist. Deleting wrong data locks again what only that
+  data earned; correcting a set keeps an unlock if the corrected value still meets the rule (Renz).
+- **Surprises stay hidden.** Locked moves are never named (Progress shows "N surprises waiting";
+  hints say "Surprise #1 · To unlock: …" and name only moves you already have).
+- **Goal profile.** Goals (lose weight, get lean, build muscle, get stronger, stamina) and focus
+  (chest, back, shoulders, arms, core, legs, cardio), any number. Chest secrets: weight =
+  1 + 2 × match score (focus match counts 2, goal match 1). Plans: best match first, at most one cardio.
+- **Gear** thresholds +2 (6/8/11/15/20/27 unlocks) because day 1 now has 4 starters.
+
+### Balance results (2026-11-18, `npm run balance`, simulated user follows the unlock hints)
+| Profile | After 90 days | Old ladder (2026-11-17 sim) |
+|---|---|---|
+| steady (6 days/week, gym) | level 15, 41 of 50 ladder moves | 28 of 33 |
+| casual (3 days/week, gym) | level 10, 27 of 50 | 18 of 33 |
+| home (6 days/week, no equipment) | level 15, 43 of 50 (High knees day 62) | — |
+High knees gate lowered 120 s → 90 s of run in place **[Design choice]**: at 120 s the home user never
+unlocked it in 90 days. Still locked after 90 days are tier 5–6 moves (deadlift, pistol, muscle-up…): intended.
+
+## Round 2 (2026-11-18, Renz's answers)
+- **Faster time** is a measure of its own (`speed`): same seconds, lower wins. Sprints and time trials use it;
+  any exercise can switch Time ⇄ Faster time in 📏. A run can be distance + time (longer wins) or distance + faster time.
+- **78 moves** (73 ladder + 5 secrets): 17 variations of base moves (knee/wide/close-grip push-up, sumo/pause squat,
+  reverse/side lunge, high plank, shoulder taps, marching bridge, hip thrust, band pull-apart, scapular pull-up,
+  chin-up, bird dog, hollow hold, half burpee) and 6 running variations (100 m sprint, 1 km and 5 km time trials,
+  intervals, 12-minute run, incline treadmill walk). Each variation names its base move. All optional: they go
+  into the inventory. Day 1 now has 5 starters (knee push-up added).
+- **Equipment-aware surprises.** Only moves doable with the equipment of at least one place are revealed,
+  hinted, counted or given by a chest. Others stay hidden until that equipment is added to a place.
+- **Secrets need their base move** (bear crawl ← plank, wall sit ← squat, superman ← bird dog,
+  shadow boxing ← run in place, skater jump ← jumping jack).
+- **Goal targets** (`GOAL_TARGETS`): strength 5–8 × 3, 120 s; muscle and lean 8–12 × 3, 90 s; stamina 15–25 × 2, 60 s;
+  lose weight 10–15 × 2, 60 s. Per exercise the first picked goal (strength > muscle > lean > stamina > lose weight)
+  that the move serves. The rest alarm is only suggested (Settings → Apply), never changed silently.
+- **Demos**: 41 moves have 2 public-domain photos (free-exercise-db, Unlicense) bundled in `public/demos/`;
+  every move has the avatar doing it and a YouTube search button.
+
+### Balance (round 2, 90 days)
+| Profile | Unlocked (of 73 ladder moves) | Most unlocks in one day |
+|---|---|---|
+| steady (gym) | 57 | 3 |
+| casual (gym) | 35 | 4 (day 80) |
+| home (no equipment) | 56 | 3 |
+High knees stays locked at 90 days in the simulation because the simulated user rarely trains run in place;
+a real user who runs in place often reaches 90 s in about 14 practice sessions [Design choice; watch it].

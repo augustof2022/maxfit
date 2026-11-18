@@ -4,6 +4,7 @@ import { EXERCISES } from '../core/exercises';
 import { fitsEquipment } from '../core/rules';
 import type { EquipmentCategory, EquipmentItem, Location } from '../core/types';
 import { addEquipment, deleteLocation, saveLocation } from '../data/repo';
+import { confirmAsk } from './Confirm';
 import { Sheet } from './ui';
 
 interface Props {
@@ -52,9 +53,9 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
   };
 
   // Quick-fill: "Bodyweight only" clears (after asking); the others ADD to what is picked.
-  const quickFill = (preset: (typeof PRESETS)[number]) => {
+  const quickFill = async (preset: (typeof PRESETS)[number]) => {
     if (preset.equipment.length === 0) {
-      if (eq.length === 0 || confirm('Clear all equipment for this place?')) setEq([]);
+      if (eq.length === 0 || (await confirmAsk({ title: 'Clear all equipment for this place?', ok: 'Clear', danger: true }))) setEq([]);
       return;
     }
     setEq((cur) => [...new Set([...cur, ...preset.equipment])]);
@@ -62,6 +63,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
 
   const save = async () => {
     if (busy) return;
+    if (loc.id && !(await confirmAsk({ title: `Save changes to "${name.trim()}"?`, body: 'Only exercises you can do with this equipment will show here.', ok: 'Save' }))) return;
     setBusy(true);
     try {
       const id = await saveLocation({ id: loc.id, name: name.trim(), kind, equipment: eq });
@@ -161,7 +163,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
           <button
             className="btn danger"
             onClick={async () => {
-              if (!confirm(`Delete the place "${loc.name}"? Your sessions stay.`)) return;
+              if (!(await confirmAsk({ title: `Delete the place "${loc.name}"?`, body: 'Your sessions stay.', ok: 'Delete', danger: true }))) return;
               await deleteLocation(loc.id!);
               onClose();
             }}
