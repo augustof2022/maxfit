@@ -68,4 +68,4 @@
   the timer's Stop started it (restartRest); (3) Settings says when plans are phone-only until the cloud update; (4) a backup
   from before plans keeps today's plans; (5) plans of a deleted place stay importable; (6) timer Cancel after GO asks first,
   44 px; (7) reward cards remembered per session across a reload; (8) an old photo gets its own day's "I did" lines; (9) BMI rAF.
-- Checks after fixes: 103 unit tests, e2e 47/47.
+- Checks after fixes: 103 unit tests, e2e 47/47. Re-review (code-reviewer): pass; its nit (timer rest flag kept too long) fixed — the flag now belongs to the timed exercise.

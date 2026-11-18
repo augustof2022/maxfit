@@ -182,31 +182,32 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   // Auto work / rest (Renz, 2026-11-18): Start set / the timer = working; Stop / Log = resting.
   // The timer's Stop starts the rest; the Log right after it keeps that rest. Any other Log while the rest
   // clock runs (a set done without Start set) starts a fresh rest and re-arms the alarm.
-  const restFromTimer = useRef(false);
-  const goRest = async (fromTimer = false) => {
+  // Which exercise's timer started the rest now running (only its own Log keeps that rest).
+  const restFromTimer = useRef<string | null>(null);
+  const goRest = async (timerExercise: string | null = null, loggedExercise: string | null = null) => {
     primeAudio();
-    if (fromTimer) {
-      restFromTimer.current = true;
+    if (timerExercise) {
+      restFromTimer.current = timerExercise;
       await setMode(session.id, 'rest');
-    } else if (session.live?.mode === 'rest' && restFromTimer.current) {
-      restFromTimer.current = false;
+    } else if (session.live?.mode === 'rest' && loggedExercise && restFromTimer.current === loggedExercise) {
+      restFromTimer.current = null;
       return;
     } else {
-      restFromTimer.current = false;
+      restFromTimer.current = null;
       await restartRest(session.id);
     }
     void scheduleRestAlarm(limit);
   };
   const goWork = async () => {
     primeAudio();
-    restFromTimer.current = false;
+    restFromTimer.current = null;
     await setMode(session.id, 'exercise');
     void cancelRestAlarm();
   };
 
-  const onLogged = async (msg: string) => {
+  const onLogged = async (msg: string, exerciseId: string) => {
     toast(msg);
-    await goRest();
+    await goRest(null, exerciseId);
   };
 
   const finish = async () => {
@@ -244,7 +245,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
         onToggle={() => setOpen(open === e.id ? null : e.id)}
         onHistory={() => setHist(e)}
         onWork={goWork}
-        onRest={() => goRest(true)}
+        onRest={() => goRest(e.id)}
         session={session}
         onLogged={onLogged}
       />
@@ -395,7 +396,7 @@ interface CardProps {
   onWork: () => Promise<void>;
   onRest: () => Promise<void>;
   session: Session;
-  onLogged: (m: string) => void;
+  onLogged: (m: string, exerciseId: string) => void;
 }
 
 function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, planItem, mode, settings, onToggle, onHistory, onWork, onRest, session, onLogged }: CardProps) {
@@ -449,7 +450,7 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, pla
       setGlow(true);
       setTimeout(() => setGlow(false), 1700);
     }
-    onLogged(r.newWeight ? `🏆 NEW WEIGHT! ${ex.name}: ${fmtValues(ms, r.set)}` : r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${fmtValues(ms, r.set)}` : `Set logged: ${fmtValues(ms, r.set)}`);
+    onLogged(r.newWeight ? `🏆 NEW WEIGHT! ${ex.name}: ${fmtValues(ms, r.set)}` : r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${fmtValues(ms, r.set)}` : `Set logged: ${fmtValues(ms, r.set)}`, ex.id);
   };
 
   return (
