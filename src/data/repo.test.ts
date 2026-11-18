@@ -2,10 +2,10 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { totalXp } from '../core/rules';
 import { db } from './db';
-import { addEquipment, deleteEquipment, ensureSeed, exportAll, finishSession, importAll, logSet, setMode, startSession } from './repo';
+import { addEquipment, deleteEquipment, deleteSession, deleteSet, ensureSeed, exportAll, finishSession, importAll, logSet, resetTrainingData, setExerciseMeasures, setMode, startSession, updateSession, updateSet, updateWeight, addWeight } from './repo';
 
 beforeEach(async () => {
-  await Promise.all([db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
+  await Promise.all([db.photos.clear(), db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
   await ensureSeed();
 });
 
@@ -109,5 +109,77 @@ describe('equipment library', () => {
     delete backup.equipment;
     await importAll(JSON.stringify(backup));
     expect(await db.profile.get('me')).toBeTruthy();
+  });
+});
+
+describe('edit and delete (Renz, 2026-11-18)', () => {
+  async function twoSessions() {
+    const a = await startSession('home');
+    await logSet(a.id, 'push_up', { reps: 8 });
+    const sa = await finishSession(a.id);
+    const b = await startSession('home');
+    const pr = await logSet(b.id, 'push_up', { reps: 10 });
+    const sb = await finishSession(b.id);
+    return { a: sa, b: sb, prSet: pr.set };
+  }
+
+  it('deleting a record set removes its XP and its record flag', async () => {
+    const { b, prSet } = await twoSessions();
+    expect(prSet.isPR).toBe(true);
+    const before = (await db.sessions.get(b.session.id))!.xpEarned;
+    await deleteSet(prSet.id);
+    const after = (await db.sessions.get(b.session.id))!;
+    expect(before - after.xpEarned).toBe(10 + 25);
+    expect(after.prs).toBe(0);
+  });
+
+  it('editing a set re-checks records: a lower value is no longer a record', async () => {
+    const { b, prSet } = await twoSessions();
+    await updateSet(prSet.id, { reps: 7 });
+    expect((await db.sets.get(prSet.id))!.isPR).toBe(false);
+    expect((await db.sessions.get(b.session.id))!.prs).toBe(0);
+  });
+
+  it('deleting a session deletes its sets and its XP', async () => {
+    const { a } = await twoSessions();
+    const xp = totalXp(await db.sessions.toArray());
+    await deleteSession(a.session.id);
+    expect((await db.sets.where('sessionId').equals(a.session.id).toArray()).every((x) => x.deleted)).toBe(true);
+    expect(totalXp(await db.sessions.toArray())).toBeLessThan(xp);
+  });
+
+  it('moving a session to another day moves its sets too', async () => {
+    const { a } = await twoSessions();
+    const day = 86_400_000;
+    await updateSession(a.session.id, { startedAt: a.session.startedAt - day });
+    const set = (await db.sets.where('sessionId').equals(a.session.id).toArray())[0];
+    expect(set.at).toBeLessThan(a.session.startedAt - day + 60_000);
+  });
+
+  it('changing the measure re-checks records', async () => {
+    const s = await startSession('home');
+    await logSet(s.id, 'push_up', { reps: 8, seconds: 30 });
+    const second = await logSet(s.id, 'push_up', { reps: 9, seconds: 20 });
+    expect(second.isPR).toBe(true);
+    await setExerciseMeasures('push_up', ['reps', 'time']);
+    expect((await db.sets.get(second.set.id))!.isPR).toBe(false); // time went down: not a beat under rule A
+  });
+
+  it('a weigh-in can be moved to a day that already has one (that one is replaced)', async () => {
+    await addWeight('2026-11-01', 70);
+    await addWeight('2026-11-02', 71);
+    const first = (await db.weights.where('date').equals('2026-11-01').toArray())[0];
+    await updateWeight(first.id, '2026-11-02', 69.5);
+    const live = (await db.weights.toArray()).filter((w) => !w.deleted);
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ date: '2026-11-02', kg: 69.5 });
+  });
+
+  it('reset deletes training data but keeps places', async () => {
+    await twoSessions();
+    await resetTrainingData();
+    expect((await db.sessions.toArray()).every((x) => x.deleted)).toBe(true);
+    expect((await db.sets.toArray()).every((x) => x.deleted)).toBe(true);
+    expect((await db.locations.toArray()).filter((l) => !l.deleted)).toHaveLength(2);
   });
 });

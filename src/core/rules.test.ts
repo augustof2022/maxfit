@@ -14,11 +14,15 @@ import {
   newUnlocks,
   nextTarget,
   openChest,
+  prFlags,
+  profileScore,
   ruleMet,
   sessionXp,
   starterPlan,
+  unlockedFrom,
   xpForLevel,
 } from './rules';
+import { beats, measuresFor } from './measures';
 import type { Session, WorkSet } from './types';
 
 const DAY = 86_400_000;
@@ -45,9 +49,18 @@ function set(exerciseId: string, v: Partial<WorkSet>, at = T0): WorkSet {
 }
 
 describe('catalog', () => {
-  it('starts with only push-up and run', () => {
+  it('day 1: four starters, all possible at home with no equipment (incline + push-up, run + run in place)', () => {
     const st = buildStats([], [], 0, T0);
-    expect(newUnlocks([], st).sort()).toEqual(['push_up', 'run']);
+    expect(newUnlocks([], st).sort()).toEqual(['incline_push_up', 'push_up', 'run', 'run_in_place']);
+    expect(newUnlocks([], st).every((id) => EXERCISE_BY_ID[id].equipment.length === 0)).toBe(true);
+  });
+  it('every exercise has measures, focus and goals; ids are unique', () => {
+    expect(new Set(EXERCISES.map((e) => e.id)).size).toBe(EXERCISES.length);
+    for (const e of EXERCISES) {
+      expect(e.measures.length, e.id).toBeGreaterThan(0);
+      expect(e.focus.length, e.id).toBeGreaterThan(0);
+      expect(e.goals.length, e.id).toBeGreaterThan(0);
+    }
   });
   it('every record rule points to a real exercise that unlocks earlier', () => {
     const check = (r: any, tier: number) => {
@@ -123,21 +136,60 @@ describe('records and targets', () => {
     expect(r.last?.reps).toBe(8);
     expect(nextTarget(EXERCISE_BY_ID.push_up, r).reps).toBe(11);
   });
-  it('weight: add reps to 12, then add 2.5 kg and drop to 8', () => {
+  it('weight: add reps to 12, then add 2.5 kg and keep the reps (a target is always a beat under rule A)', () => {
     const ex = EXERCISE_BY_ID.db_curl;
     let r = computeRecords([set('db_curl', { weightKg: 10, reps: 9 })]).get('db_curl');
     expect(nextTarget(ex, r)).toMatchObject({ weightKg: 10, reps: 10 });
-    r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 })]).get('db_curl');
-    expect(nextTarget(ex, r)).toMatchObject({ weightKg: 12.5, reps: 8 });
+    r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 })]).get('db_curl')!;
+    const t = nextTarget(ex, r);
+    expect(t).toMatchObject({ weightKg: 12.5, reps: 12 });
+    expect(beats(ex.measures, { weightKg: t.weightKg, reps: t.reps }, r.bestSet)).toBe(true);
   });
-  it('weight: heavier beats lighter even with fewer reps', () => {
+  it('rule A: heavier with fewer reps is not a record; the best weight is still tracked', () => {
     const r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 }, 1), set('db_curl', { weightKg: 12.5, reps: 6 }, 2)]).get('db_curl')!;
-    expect(r.best).toBe(12.5);
+    expect(r.bestSet?.weightKg).toBe(10);
+    expect(r.bests.weight).toBe(12.5);
+    expect(r.best).toBe(12.5); // main measure (weight) best, used by unlocks
+  });
+  it('rule A: one measure up and none down is a beat', () => {
+    expect(beats(['weight', 'reps'], { weightKg: 10, reps: 11 }, { weightKg: 10, reps: 10 })).toBe(true);
+    expect(beats(['weight', 'reps'], { weightKg: 10, reps: 10 }, { weightKg: 10, reps: 10 })).toBe(false);
+    expect(beats(['weight', 'reps'], { weightKg: 12.5, reps: 9 }, { weightKg: 10, reps: 10 })).toBe(false);
+    expect(beats(['reps'], { weightKg: 0, reps: 11 }, { weightKg: 10, reps: 10 })).toBe(true); // weight not tracked
+  });
+  it('the user can choose the measures; records follow the choice', () => {
+    const ex = EXERCISE_BY_ID.knee_raise;
+    expect(measuresFor(ex, {})).toEqual(ex.measures);
+    expect(measuresFor(ex, { knee_raise: ['time'] })).toEqual(['time']);
+    const sets = [set('knee_raise', { seconds: 30 }, 1), set('knee_raise', { seconds: 40 }, 2)];
+    const byTime = computeRecords(sets, () => ['time']).get('knee_raise')!;
+    expect(byTime.bestSet?.seconds).toBe(40);
+    expect(nextTarget(ex, byTime, ['time']).seconds).toBe(45);
+    const flags = prFlags(sets, () => ['time']);
+    expect([...flags.values()]).toEqual([false, true]);
   });
   it('distance: tracks best km and best pace', () => {
     const r = computeRecords([set('run', { distanceKm: 2, durationSec: 840 }), set('run', { distanceKm: 1, durationSec: 360 }, T0 + 1)]).get('run')!;
     expect(r.best).toBe(2);
     expect(r.bestPace).toBe(6);
+  });
+});
+
+describe('unlocks come from the data', () => {
+  it('deleting the record that earned an unlock locks it again', () => {
+    const recordRule = EXERCISES.find((e) => e.unlock.type === 'record' && (e.unlock as any).exerciseId === 'push_up')!;
+    const need = (recordRule.unlock as any).value as number;
+    const good = set('push_up', { reps: need });
+    const withRecord = unlockedFrom(buildStats([session(0)], [good], 0, T0), [session(0)]);
+    expect(withRecord).toContain(recordRule.id);
+    const deleted = unlockedFrom(buildStats([session(0)], [{ ...good, deleted: true }], 0, T0), [session(0)]);
+    expect(deleted).not.toContain(recordRule.id);
+  });
+  it('a chest secret stays only while its session exists', () => {
+    const s = { ...session(0), chestSecret: 'wall_sit' };
+    expect(unlockedFrom(buildStats([s], [], 0, T0), [s])).toContain('wall_sit');
+    const gone = { ...s, deleted: true };
+    expect(unlockedFrom(buildStats([gone], [], 0, T0), [gone])).not.toContain('wall_sit');
   });
 });
 
@@ -197,6 +249,13 @@ describe('mystery chest', () => {
     const ctx = { unlocked: ['push_up'], cosmetics: [], hadPR: true, records, available: [EXERCISE_BY_ID.push_up] };
     const kinds = new Set(Array.from({ length: 300 }, (_, i) => openChest(`seed${i}`, ctx).kind));
     expect([...kinds].sort()).toEqual(['challenge', 'color', 'secret', 'xp']);
+  });
+  it('secrets lean toward the goal profile', () => {
+    const ctx = { unlocked: ['push_up'], cosmetics: ['ember', 'ocean', 'jade', 'violet', 'gold', 'rose'], hadPR: false, records: new Map(), available: [], focus: ['legs' as const] };
+    const picks = Array.from({ length: 400 }, (_, i) => openChest(`f${i}`, ctx)).filter((r) => r.kind === 'secret').map((r) => (r as any).exerciseId as string);
+    const legHits = picks.filter((id) => profileScore(EXERCISE_BY_ID[id], [], ['legs']) > 0).length;
+    const legShare = EXERCISES.filter((e) => e.unlock.type === 'secret' && profileScore(e, [], ['legs']) > 0).length / EXERCISES.filter((e) => e.unlock.type === 'secret').length;
+    expect(legHits / picks.length).toBeGreaterThan(legShare);
   });
   it('challenge is met by a set at or above target', () => {
     expect(challengeMet({ exerciseId: 'push_up', target: 12, xp: 100 }, [set('push_up', { reps: 12 })])).toBe(true);

@@ -1,10 +1,15 @@
+import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
-import { Bar, ICONS } from '../components/ui';
+import { Bar, IconBtn, Sheet, Stepper } from '../components/ui';
+import { confirmAsk } from '../components/Confirm';
+import { EditSetSheet, MeasureSheet } from '../components/SetEditors';
 import { EXERCISES, EXERCISE_BY_ID, TIER_NAMES } from '../core/exercises';
 import { equipmentName } from '../core/equipment';
 import { fmtClock } from '../core/live';
-import { AVATAR_STAGES, COLORS, describeRule, doneSessions, GEAR, ruleProgress } from '../core/rules';
-import { updateProfile } from '../data/repo';
+import { fmtValues, iconFor, MEASURES } from '../core/measures';
+import { AVATAR_STAGES, COLORS, dayKey, doneSessions, GEAR, nextUnlockHints } from '../core/rules';
+import type { Exercise, Session, WorkSet } from '../core/types';
+import { deleteSession, updateProfile, updateSession } from '../data/repo';
 import type { Game } from '../data/useGame';
 import { fmtRecord } from './Train';
 
@@ -12,11 +17,16 @@ export function Progress({ game }: { game: Game }) {
   const p = game.profile!;
   const d = game.d!;
   const color = COLORS.find((c) => c.id === p.color)?.hex ?? '#ff7a1a';
-  const unlocked = new Set(p.unlocked);
-  const history = doneSessions(game.sessions).reverse().slice(0, 20);
+  const unlocked = new Set(d.unlocked);
+  const history = doneSessions(game.sessions).reverse().slice(0, 30);
+  const waiting = EXERCISES.length - d.unlocked.length;
+  const next = nextUnlockHints(d.unlocked, d.stats, 1)[0];
+  const [measuring, setMeasuring] = useState<Exercise | null>(null);
+  const [editSet, setEditSet] = useState<WorkSet | null>(null);
+  const [editSession, setEditSession] = useState<Session | null>(null);
 
   return (
-    <div className="stack">
+    <div className="stack screen">
       <h1>Progress</h1>
 
       <section className="card stack" aria-label="Avatar evolution">
@@ -24,7 +34,7 @@ export function Progress({ game }: { game: Game }) {
         <div className="row" style={{ overflowX: 'auto', gap: 4, paddingBottom: 4 }}>
           {AVATAR_STAGES.map((s, i) => (
             <div key={s.name} className="stack" style={{ alignItems: 'center', gap: 2, flex: 'none' }}>
-              <Avatar stage={i} gear={i === d.stage ? d.gear : []} color={color} size={64} silhouette={i > d.stage} />
+              <Avatar stage={i} gear={i === d.stage ? d.gear : []} color={color} size={64} silhouette={i > d.stage} style={p.avatarStyle} action={i === d.stage ? 'idle' : 'still'} />
               <span className={`tiny ${i === d.stage ? '' : 'muted'}`}>{i > d.stage ? `Lv ${s.minLevel}` : s.name}</span>
             </div>
           ))}
@@ -54,7 +64,7 @@ export function Progress({ game }: { game: Game }) {
             );
           })}
         </div>
-        <p className="small muted">New colors come from mystery chests.</p>
+        <p className="small muted">New colors come from mystery chests. Change the avatar style in Settings.</p>
       </section>
 
       <section className="card row between num" aria-label="Stats">
@@ -72,70 +82,163 @@ export function Progress({ game }: { game: Game }) {
         </div>
         <div className="stat">
           <span className="tiny muted">Unlocked</span>
-          <b>
-            {p.unlocked.length}/{EXERCISES.length}
-          </b>
+          <b>{d.unlocked.length}</b>
         </div>
       </section>
 
-      <section className="stack" aria-label="Exercise ladder">
-        <h2>Exercise ladder</h2>
-        {[1, 2, 3, 4, 5, 6, 0].map((tier) => (
-          <div key={tier} className="stack" style={{ gap: 8 }}>
-            <div className="tier-head">
-              <h3>
-                Tier {tier || '?'} · {TIER_NAMES[tier]}
-              </h3>
-            </div>
-            {EXERCISES.filter((e) => e.tier === tier).map((e) => {
-              const has = unlocked.has(e.id);
-              const rec = d.stats.records.get(e.id);
-              const secretHidden = tier === 0 && !has;
-              const prog = ruleProgress(e.unlock, d.stats);
-              return (
-                <div key={e.id} className={`card ex ${has ? '' : 'locked'}`}>
-                  <span className="ico">{has ? ICONS[e.metric] : '🔒'}</span>
-                  <div className="grow stack" style={{ gap: 4 }}>
-                    <b>{secretHidden ? '???' : e.name}</b>
-                    {has ? (
-                      <span className="small muted">{rec ? `Record ${fmtRecord(e, rec)} · ${rec.count} sets` : 'Unlocked. Try it next session!'}</span>
-                    ) : (
-                      <>
-                        <span className="small muted">{describeRule(e.unlock)}</span>
-                        {!secretHidden && <Bar value={prog.current} max={prog.needed} />}
-                      </>
-                    )}
-                    {e.equipment.length > 0 && <span className="tiny muted">Needs: {e.equipment.map((id) => equipmentName(id)).join(', ')}</span>}
+      <section className="stack" aria-label="Your exercises">
+        <h2>Your exercises</h2>
+        {[1, 2, 3, 4, 5, 6, 0].map((tier) => {
+          const mine = EXERCISES.filter((e) => e.tier === tier && unlocked.has(e.id));
+          if (!mine.length) return null;
+          return (
+            <div key={tier} className="stack" style={{ gap: 8 }}>
+              <div className="tier-head">
+                <h3>
+                  Tier {tier || '★'} · {TIER_NAMES[tier]}
+                </h3>
+              </div>
+              {mine.map((e) => {
+                const ms = d.measuresOf(e);
+                const rec = d.stats.records.get(e.id);
+                return (
+                  <div key={e.id} className="card ex">
+                    <span className="ico">{iconFor(ms)}</span>
+                    <div className="grow stack" style={{ gap: 4 }}>
+                      <b>{e.name}</b>
+                      <span className="small muted">{rec?.bestSet ? `Record ${fmtRecord(ms, rec)} · ${rec.count} sets` : 'Unlocked. Try it next session!'}</span>
+                      {e.equipment.length > 0 && <span className="tiny muted">Needs: {e.equipment.map((id) => equipmentName(id, game.customEquipment)).join(', ')}</span>}
+                    </div>
+                    <IconBtn label={`How ${e.name} is measured`} onClick={() => setMeasuring(e)}>
+                      📏 {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join('+')}
+                    </IconBtn>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          );
+        })}
+        {waiting > 0 && (
+          <div className="card stack surprise" aria-label="Surprises waiting">
+            <span style={{ fontSize: 34 }} aria-hidden>
+              🎁
+            </span>
+            <b>{waiting} surprises waiting</b>
+            <span className="small muted">New moves stay hidden until you unlock them.</span>
+            {next && (
+              <>
+                <Bar value={next.current} max={next.needed} />
+                <span className="small muted">Next one: {next.text}</span>
+              </>
+            )}
           </div>
-        ))}
+        )}
       </section>
 
       <section className="card stack" aria-label="History">
-        <h2>Recent sessions</h2>
+        <h2>History</h2>
+        <p className="small muted">Tap ✎ to fix a wrong entry, or delete test data.</p>
         {history.length === 0 && <p className="muted">No sessions yet. Your first one is the hardest. Start small.</p>}
         {history.map((s) => {
-          const sets = d.liveSets.filter((x) => x.sessionId === s.id);
-          const names = [...new Set(sets.map((x) => EXERCISE_BY_ID[x.exerciseId]?.name))].join(', ');
+          const sets = d.liveSets.filter((x) => x.sessionId === s.id).sort((a, b) => a.at - b.at);
           return (
-            <div key={s.id} className="stack" style={{ gap: 2 }}>
+            <div key={s.id} className="stack" style={{ gap: 4 }}>
               <div className="row between small">
                 <b>{new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</b>
                 <span className="num">
                   {fmtClock(s.activeSec + s.restSec)} · +{s.xpEarned} XP {s.prs > 0 && <span className="badge pr">{s.prs} PR</span>}
                 </span>
+                <IconBtn label="Edit session" onClick={() => setEditSession(s)}>
+                  ✎
+                </IconBtn>
               </div>
               <span className="small muted">
-                Active {fmtClock(s.activeSec)} · Rest {fmtClock(s.restSec)} · {sets.length} sets{names ? ` · ${names}` : ''}
+                Active {fmtClock(s.activeSec)} · Rest {fmtClock(s.restSec)} · {game.locations.find((l) => l.id === s.locationId)?.name ?? 'Anywhere'}
               </span>
+              {sets.map((x) => {
+                const ex = EXERCISE_BY_ID[x.exerciseId];
+                if (!ex) return null;
+                return (
+                  <button key={x.id} className="row between small set-row" onClick={() => setEditSet(x)} aria-label={`Edit ${ex.name} set`}>
+                    <span>
+                      {ex.name}: {fmtValues(d.measuresOf(ex), x)} {x.isPR && <span className="badge pr">PR</span>}
+                    </span>
+                    <span className="muted">✎</span>
+                  </button>
+                );
+              })}
               <hr />
             </div>
           );
         })}
       </section>
+
+      {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} onClose={() => setMeasuring(null)} />}
+      {editSet && EXERCISE_BY_ID[editSet.exerciseId] && <EditSetSheet ex={EXERCISE_BY_ID[editSet.exerciseId]} ms={d.measuresOf(EXERCISE_BY_ID[editSet.exerciseId])} set={editSet} onClose={() => setEditSet(null)} />}
+      {editSession && <EditSessionSheet game={game} s={editSession} onClose={() => setEditSession(null)} />}
     </div>
+  );
+}
+
+function EditSessionSheet({ game, s, onClose }: { game: Game; s: Session; onClose: () => void }) {
+  const start = new Date(s.startedAt);
+  const [date, setDate] = useState(dayKey(s.startedAt));
+  const [time, setTime] = useState(`${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`);
+  const [active, setActive] = useState(Math.round(s.activeSec / 60));
+  const [rest, setRest] = useState(Math.round(s.restSec / 60));
+  const [loc, setLoc] = useState(s.locationId);
+  const sets = game.d!.liveSets.filter((x) => x.sessionId === s.id).length;
+
+  const save = async () => {
+    const [y, m, dd] = date.split('-').map(Number);
+    const [hh, mm] = time.split(':').map(Number);
+    const startedAt = new Date(y, m - 1, dd, hh, mm).getTime();
+    if (!(await confirmAsk({ title: 'Save changes to this session?', body: 'Streaks, the daily goal and records follow the new date and minutes.', ok: 'Save' }))) return;
+    await updateSession(s.id, { startedAt, activeSec: Math.round(active * 60), restSec: Math.round(rest * 60), locationId: loc });
+    onClose();
+  };
+  const remove = async () => {
+    if (!(await confirmAsk({ title: 'Delete this session?', body: `It has ${sets} sets and +${s.xpEarned} XP. Everything goes, and anything only it unlocked locks again.`, ok: 'Delete', danger: true }))) return;
+    await deleteSession(s.id);
+    onClose();
+  };
+
+  return (
+    <Sheet onClose={onClose}>
+      <h2>Edit session</h2>
+      <div className="row wrap">
+        <label className="field">
+          Date
+          <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label className="field">
+          Start
+          <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </label>
+      </div>
+      <div className="row wrap">
+        <Stepper label="Active" unit="min" value={active} onChange={setActive} />
+        <Stepper label="Rest" unit="min" value={rest} onChange={setRest} />
+      </div>
+      <div className="row wrap" role="radiogroup" aria-label="Place">
+        {game.locations.map((l) => (
+          <button key={l.id} role="radio" aria-checked={loc === l.id} className={`chip ${loc === l.id ? 'on' : ''}`} onClick={() => setLoc(l.id)}>
+            {l.name}
+          </button>
+        ))}
+      </div>
+      <p className="small muted">To fix a set, close this and tap the set in the list.</p>
+      <div className="row">
+        <button className="btn danger" onClick={remove}>
+          Delete
+        </button>
+        <button className="btn ghost grow" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn primary grow" onClick={save} disabled={!date || !time}>
+          Save
+        </button>
+      </div>
+    </Sheet>
   );
 }

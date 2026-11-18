@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { LineChart, Stepper } from '../components/ui';
+import { IconBtn, LineChart, Sheet, Stepper } from '../components/ui';
+import { confirmAsk } from '../components/Confirm';
+import { PhotoJournal } from '../components/PhotoJournal';
 import { bmi, bmiCategory, dayKey } from '../core/rules';
-import { addWeight, deleteWeight, updateProfile } from '../data/repo';
+import type { WeightEntry } from '../core/types';
+import { addWeight, deleteWeight, updateProfile, updateWeight } from '../data/repo';
 import type { Game } from '../data/useGame';
 
 const CAT_COLOR: Record<string, string> = { Underweight: 'var(--rest)', Normal: 'var(--good)', Overweight: 'var(--accent2)', Obese: 'var(--bad)' };
@@ -15,9 +18,17 @@ export function Body({ game }: { game: Game }) {
   const [height, setHeight] = useState(p.heightCm ?? 0);
   const b = last && p.heightCm ? bmi(last.kg, p.heightCm) : null;
   const first = ws[0];
+  const [editing, setEditing] = useState<WeightEntry | null>(null);
+
+  const save = async () => {
+    const v = Math.round(kg * 10) / 10;
+    const existing = ws.find((w) => w.date === date);
+    if (existing && !(await confirmAsk({ title: `Replace ${date}?`, body: `That day already has ${existing.kg} kg. Replace it with ${v} kg?`, ok: 'Replace' }))) return;
+    await addWeight(date, v);
+  };
 
   return (
-    <div className="stack">
+    <div className="stack screen">
       <h1>Body</h1>
 
       <section className="card stack" aria-label="BMI">
@@ -53,7 +64,7 @@ export function Body({ game }: { game: Game }) {
             <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
-        <button className="btn primary big" disabled={kg <= 0} onClick={() => addWeight(date, Math.round(kg * 10) / 10)}>
+        <button className="btn primary big" disabled={kg <= 0} onClick={save}>
           Save weight
         </button>
       </section>
@@ -68,7 +79,14 @@ export function Body({ game }: { game: Game }) {
         <div className="row">
           <Stepper label="Height" unit="cm" value={height} step={1} onChange={setHeight} />
         </div>
-        <button className="btn ghost" disabled={height < 100 || height > 250} onClick={() => updateProfile({ heightCm: height })}>
+        <button
+          className="btn ghost"
+          disabled={height < 100 || height > 250 || height === p.heightCm}
+          onClick={async () => {
+            if (p.heightCm && !(await confirmAsk({ title: 'Change your height?', body: `${p.heightCm} cm → ${height} cm. All BMI numbers use the new height.`, ok: 'Change' }))) return;
+            await updateProfile({ heightCm: height });
+          }}
+        >
           Save height
         </button>
       </section>
@@ -82,13 +100,60 @@ export function Body({ game }: { game: Game }) {
             <span className="num">
               {w.kg} kg{p.heightCm ? ` · BMI ${bmi(w.kg, p.heightCm)}` : ''}
             </span>
-            <button className="btn ghost" style={{ minHeight: 32, padding: '4px 10px' }} onClick={() => deleteWeight(w.id)} aria-label={`Delete ${w.date}`}>
-              ✕
-            </button>
+            <IconBtn label={`Edit ${w.date}`} onClick={() => setEditing(w)}>
+              ✎
+            </IconBtn>
           </div>
         ))}
       </section>
+
+      <PhotoJournal game={game} />
+
+      {editing && <EditWeightSheet w={editing} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+function EditWeightSheet({ w, onClose }: { w: WeightEntry; onClose: () => void }) {
+  const [kg, setKg] = useState(w.kg);
+  const [date, setDate] = useState(w.date);
+  return (
+    <Sheet onClose={onClose}>
+      <h2>Edit weigh-in</h2>
+      <div className="row wrap">
+        <Stepper label="Weight" unit="kg" value={kg} step={0.1} onChange={setKg} />
+        <label className="field">
+          Date
+          <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
+        </label>
+      </div>
+      <div className="row">
+        <button
+          className="btn danger"
+          onClick={async () => {
+            if (!(await confirmAsk({ title: 'Delete this weigh-in?', body: `${w.date}: ${w.kg} kg.`, ok: 'Delete', danger: true }))) return;
+            await deleteWeight(w.id);
+            onClose();
+          }}
+        >
+          Delete
+        </button>
+        <button className="btn ghost grow" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          className="btn primary grow"
+          disabled={kg <= 0 || !date}
+          onClick={async () => {
+            if (!(await confirmAsk({ title: 'Save this correction?', body: `${w.date} ${w.kg} kg → ${date} ${Math.round(kg * 10) / 10} kg.`, ok: 'Save' }))) return;
+            await updateWeight(w.id, date, Math.round(kg * 10) / 10);
+            onClose();
+          }}
+        >
+          Save
+        </button>
+      </div>
+    </Sheet>
   );
 }
 

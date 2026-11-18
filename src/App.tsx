@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ensureSeed, type SessionSummary } from './data/repo';
 import { useGame } from './data/useGame';
 import { Toast } from './components/ui';
+import { ConfirmHost } from './components/Confirm';
+import { UpdateBar } from './components/UpdateBar';
 import { Home } from './screens/Home';
 import { Train } from './screens/Train';
 import { Progress } from './screens/Progress';
@@ -72,7 +74,8 @@ export default function App() {
 
   return (
     <>
-      <main className="app">
+      <main className="app" key={tab}>
+        <UpdateBar />
         {tab === 'home' && <Home game={game} go={setTab} />}
         {tab === 'train' && <Train game={game} toast={setToast} onFinished={onFinished} />}
         {tab === 'progress' && <Progress game={game} />}
@@ -91,9 +94,11 @@ export default function App() {
         ))}
       </nav>
       {toast && <Toast text={toast} onDone={clearToast} />}
+      <ConfirmHost />
       {summary && (
         <Summary
           s={summary}
+          avatarStyle={game.profile.avatarStyle}
           onClose={() => {
             setSummary(null);
             setTab('home');

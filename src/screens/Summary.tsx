@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
-import { Sheet } from '../components/ui';
+import { CountUp, Sheet } from '../components/ui';
 import { EXERCISE_BY_ID } from '../core/exercises';
 import { fmtClock } from '../core/live';
+import { fmtValues, mainMeasure } from '../core/measures';
 import { AVATAR_STAGES, avatarStage, COLORS } from '../core/rules';
 import type { SessionSummary } from '../data/repo';
 
-export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void }) {
+export function Summary({ s, onClose, avatarStyle }: { s: SessionSummary; onClose: () => void; avatarStyle?: 'athlete' | 'line' | 'buddy' }) {
   const [chestOpen, setChestOpen] = useState(false);
   const stageBefore = avatarStage(s.levelBefore);
   const stageAfter = avatarStage(s.levelAfter);
@@ -40,9 +41,8 @@ export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void
         <div className="card stack">
           <h2>🏆 New records</h2>
           {prs.map((x) => (
-            <span key={x.id}>
-              {EXERCISE_BY_ID[x.exerciseId]?.name}: {x.reps ?? x.seconds ?? x.distanceKm}
-              {x.weightKg ? ` (${x.weightKg} kg)` : ''}
+            <span key={x.id} className="pop">
+              {EXERCISE_BY_ID[x.exerciseId]?.name}: {fmtValues(EXERCISE_BY_ID[x.exerciseId]?.measures ?? ['reps'], x)}
             </span>
           ))}
         </div>
@@ -50,8 +50,10 @@ export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void
 
       <div className="card stack">
         <div className="row between">
-          <h2>+{s.xp} XP</h2>
-          {s.levelAfter > s.levelBefore && <span className="badge new">LEVEL {s.levelAfter}!</span>}
+          <h2>
+            +<CountUp value={s.xp} ms={1100} /> XP
+          </h2>
+          {s.levelAfter > s.levelBefore && <span className="badge new pop">LEVEL {s.levelAfter}!</span>}
         </div>
         {s.xpParts.map((p) => (
           <div key={p.label} className="row between small">
@@ -62,8 +64,8 @@ export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void
       </div>
 
       {stageAfter > stageBefore && (
-        <div className="card row">
-          <Avatar stage={stageAfter} gear={[]} color="#ff7a1a" size={80} />
+        <div className="card row pop">
+          <Avatar stage={stageAfter} gear={[]} color="#ff7a1a" size={90} style={avatarStyle} action="celebrate" />
           <div>
             <span className="tiny muted">Avatar evolved</span>
             <h2>
@@ -74,8 +76,8 @@ export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void
       )}
 
       {s.unlocked.length > 0 && (
-        <div className="card stack" style={{ borderColor: 'var(--good)' }}>
-          <h2>🔓 Unlocked!</h2>
+        <div className="card stack pop" style={{ borderColor: 'var(--good)' }}>
+          <h2>🎁 Surprise unlocked!</h2>
           {s.unlocked.map((id) => (
             <span key={id}>
               <b>{EXERCISE_BY_ID[id]?.name}</b> <span className="small muted">— {EXERCISE_BY_ID[id]?.cue}</span>
@@ -95,7 +97,9 @@ export function Summary({ s, onClose }: { s: SessionSummary; onClose: () => void
             </button>
           </>
         ) : (
-          <ChestText s={s} />
+          <div className="pop">
+            <ChestText s={s} />
+          </div>
         )}
       </div>
 
@@ -130,8 +134,7 @@ function ChestText({ s }: { s: SessionSummary }) {
     <>
       <h2>⚡ Surprise challenge</h2>
       <p>
-        Next time: {ex?.name} — hit {c.challenge.target}
-        {ex?.metric === 'time' ? 's' : ex?.metric === 'distance' ? ' km' : ' reps'} in one set for +{c.challenge.xp} XP.
+        Next time: {ex?.name} — hit {ex ? fmtValues([mainMeasure(ex)], { reps: c.challenge.target, seconds: c.challenge.target, distanceKm: c.challenge.target }) : c.challenge.target} in one set for +{c.challenge.xp} XP.
       </p>
     </>
   );

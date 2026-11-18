@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
-import { availableExercises, buildStats, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals, totalXp } from '../core/rules';
+import { availableExercises, deriveGame, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals } from '../core/rules';
 import { db } from './db';
 
 /** Everything the screens need, live from the local database. */
@@ -16,8 +16,7 @@ export function useGame() {
     if (!profile) return null;
     const now = Date.now();
     const liveSets = sets.filter((s) => !s.deleted);
-    const xp = totalXp(sessions);
-    const stats = buildStats(sessions, liveSets, xp, now);
+    const { xp, stats, unlocked, measuresOf } = deriveGame(profile, sessions, liveSets, now);
     const lp = levelProgress(xp);
     const active = sessions.find((s) => s.status === 'active' && !s.deleted) ?? null;
     const location = locations.find((l) => l.id === (active?.locationId ?? profile.lastLocationId)) ?? locations[0] ?? null;
@@ -27,12 +26,15 @@ export function useGame() {
       xpInto: lp.into,
       xpNeed: lp.need,
       stage: avatarStage(lp.level),
-      gear: gearFor(profile.unlocked.length),
+      gear: gearFor(unlocked.length),
+      unlocked,
+      measuresOf,
+      xp,
       goalMin: habitTarget(sessions, profile.habitBaseMin, profile.habitCapMin),
       week: dailyTotals(sessions, 7, now),
       active,
       location,
-      available: availableExercises(profile.unlocked, location?.equipment ?? []),
+      available: availableExercises(unlocked, location?.equipment ?? []),
       liveSets,
     };
   }, [profile, sessions, sets, locations]);

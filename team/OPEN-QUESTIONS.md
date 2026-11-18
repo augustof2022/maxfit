@@ -10,13 +10,18 @@
 | Q7 | 2026-11-17 | Several short sessions in one day each count toward session unlocks and chests | Unlock speed | **Answered 2026-11-17:** yes |
 | Q5 | 2026-11-17 | Is the repo public or private? GitHub Pages for a private repo needs a paid plan | Decides how you open the web app on your phone | Open |
 | Q8 | 2026-11-17 | The repo's default branch on GitHub is still the work branch. Switch it to `main`? (GitHub → Settings → General → Default branch) | New sessions and PRs start from main | Open |
-| Q9 | 2026-11-18 | In-app update: OK to set a fixed APK signing key (one-time uninstall/reinstall)? Is cloud sync on, so that reinstall keeps data? Where to host the APK if the repo is private? | Each CI build is signed with a new random debug key, so Android refuses to update over it | Open |
-| Q10 | 2026-11-18 | Multi-metric "beat" rule (e.g. weight + reps): A any goes up and none goes down / B main metric only / C combined score | Decides records, PRs and unlocks | Open |
-| Q11 | 2026-11-18 | Starter cardio at home: swap "Run" for a home move (jumping jacks / high knees) or pick by location? | Run cannot be measured at home | Open |
-| Q12 | 2026-11-18 | Hidden unlocks: hide fully, or show "? surprises waiting" plus a nameless hint for the next one? | Item 3 | Open |
-| Q13 | 2026-11-18 | Goal profile: which goals and focus areas; may goals change reps and rest (only with sources)? | Item 4 | Open |
-| Q14 | 2026-11-18 | Add a new `exercise-scientist` agent (high effort) to the MaxFit team? | Item 5; adding an agent needs Renz's yes | Open |
-| Q15 | 2026-11-18 | Avatar style: an example image of a look you like | Item 6 quality bar | Open |
-| Q16 | 2026-11-18 | After you edit or delete data: recompute XP, records and streak (yes); also re-lock exercises earned only from deleted data? | Item 7; today unlocks never re-lock | Open |
-| Q17 | 2026-11-18 | Progress photos: phone only, or also private cloud backup? Show weight/BMI on the photo by default? | Item 8; body photos are sensitive data | Open |
-| Q18 | 2026-11-18 | Deadline and order of the 8 items | Planning | Open |
+| Q9 | 2026-11-18 | In-app update: OK to set a fixed APK signing key (one-time uninstall/reinstall)? Is cloud sync on, so that reinstall keeps data? Where to host the APK if the repo is private? | Each CI build is signed with a new random debug key, so Android refuses to update over it | **Answered 2026-11-18:** yes to a fixed signing key (Renz adds 2 GitHub secrets); no cloud sync yet (setup steps sent); repo is public |
+| Q10 | 2026-11-18 | Multi-metric "beat" rule (e.g. weight + reps): A any goes up and none goes down / B main metric only / C combined score | Decides records, PRs and unlocks | **Answered 2026-11-18:** rule A |
+| Q11 | 2026-11-18 | Starter cardio at home: swap "Run" for a home move (jumping jacks / high knees) or pick by location? | Run cannot be measured at home | **Answered 2026-11-18 (via research):** day 1 has run in place + run; jumping jacks and high knees follow |
+| Q12 | 2026-11-18 | Hidden unlocks: hide fully, or show "? surprises waiting" plus a nameless hint for the next one? | Item 3 | **Answered 2026-11-18:** hide fully; nameless hint kept |
+| Q13 | 2026-11-18 | Goal profile: which goals and focus areas; may goals change reps and rest (only with sources)? | Item 4 | **Answered 2026-11-18:** OK to the list; rep/rest by goal only with sources (not built yet) |
+| Q14 | 2026-11-18 | Add a new `exercise-scientist` agent (high effort) to the MaxFit team? | Item 5; adding an agent needs Renz's yes | **Answered 2026-11-18:** yes, added |
+| Q15 | 2026-11-18 | Avatar style: an example image of a look you like | Item 6 quality bar | **Answered 2026-11-18:** propose 3, and they must move (walk, jump, do exercises) |
+| Q16 | 2026-11-18 | After you edit or delete data: recompute XP, records and streak (yes); also re-lock exercises earned only from deleted data? | Item 7; today unlocks never re-lock | **Answered 2026-11-18:** yes, deleted data locks again; corrections keep it; every change asks "are you sure?" |
+| Q17 | 2026-11-18 | Progress photos: phone only, or also private cloud backup? Show weight/BMI on the photo by default? | Item 8; body photos are sensitive data | **Answered 2026-11-18:** phone only |
+| Q18 | 2026-11-18 | Deadline and order of the 8 items | Planning | **Answered 2026-11-18:** deadline now |
+| Q19 | 2026-11-18 | Cardio records: may run / treadmill / bike compare distance and **pace** instead of raw time? With rule A and raw time, a faster run over the same distance is not a record | Fairness for cardio records | Open |
+| Q20 | 2026-11-18 | Home equipment: do you have a resistance band, pull-up bar, dumbbells, ab wheel? | Several new moves need them; Home is seeded with a mat only | Open (same as Q2) |
+| Q21 | 2026-11-18 | Secret moves only after their base move is unlocked (e.g. skater jump after jumping jacks)? | Safety of chest surprises; small engine change | Open |
+| Q22 | 2026-11-18 | Allow acsm.org, pacompendium.com and pmc.ncbi.nlm.nih.gov in the session network so sources can be opened, not just searched? | All new sources are "search only" | Open |
+| Q23 | 2026-11-18 | Goal-based rep and rest targets (e.g. shorter rest for stamina)? The research table has them with grades | Item 4 part 2 | Open |

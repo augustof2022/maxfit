@@ -12,3 +12,6 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-17: Agent files created mid-session cannot be called as subagent types until the next session. Use general-purpose: "read <agent file> and act as that agent".
 - 2026-11-17: Renz's Supabase project is shared with a notes app. Ask before applying migrations; prefix MaxFit objects with maxfit_.
 - 2026-11-17: First code review found 10 issues (5 in sync) that 27 unit + 16 e2e tests missed. Always run code-reviewer before calling a feature done, and add tests for every finding.
+- 2026-11-18: Balance sim with a "dumb rotation" user hid record-gated moves forever; a sim user that follows the unlock hints is the realistic test. Keep both in mind.
+- 2026-11-18: Background research agent + coding in parallel saved the most time; give it a strict output table format so it converts straight into exercises.ts.
+- 2026-11-18: Debug APKs built in CI get a new random key each run, so they can never update each other. Any update feature needs a fixed key in secrets first.

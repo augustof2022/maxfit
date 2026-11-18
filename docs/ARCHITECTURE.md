@@ -65,3 +65,17 @@ banks the elapsed time. A reload or a killed app keeps counting correctly from t
 | Rest too long | In-app sound + vibration, plus a scheduled notification at the limit (rings with screen off) | Sound + vibration while open; screen kept on with Wake Lock |
 | Time to train (days + time) | Weekly scheduled notifications | Notification/banner while the app is open |
 | Weigh-in (day + time) | Weekly scheduled notification | Notification/banner while open + Home banner |
+
+## Added 2026-11-18
+- `src/core/measures.ts`: measures, rule A (`beats`), formatting. `rules.ts`: `computeRecords(sets, measuresOf)`,
+  `prFlags`, `unlockedFrom` (unlocks derived from data), `deriveGame`, `profileScore`, `suggestedPlan`.
+- `repo.ts`: `updateSet`, `deleteSet`, `updateSession`, `deleteSession`, `updateWeight`, `setExerciseMeasures`,
+  `resetTrainingData`. After any set change, `reconcileRecords` re-checks record flags and fixes each finished
+  session's XP by the difference (set = 10 XP, record = 25 XP).
+- Dexie v3: `photos` table — **not** in `SYNC_TABLES` (phone only). Not in backups (size).
+- Every edit/delete asks first: `components/Confirm.tsx` (`confirmAsk`).
+- Android plugin `MaxFitNativePlugin.java` (registered in `MainActivity`): app version, download + install update
+  (only from MaxFit's own release URL), save to gallery / Downloads (MediaStore), share sheet.
+- Updates: `lib/update.ts`. APK: compare installed `versionCode` with the "apk-latest" release title
+  ("MaxFit vX build N"). Web: PWA `registerType: 'prompt'` → "Update" reloads into the new files.
+- CI (`android.yml`): signs with the fixed key from secrets, `versionCode` = run number, publishes only from `main`.

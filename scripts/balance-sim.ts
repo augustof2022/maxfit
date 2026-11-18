@@ -3,11 +3,17 @@
 // the ladder (src/core/exercises.ts) or XP numbers (src/core/rules.ts).
 //   npm run balance              -> steady user: trains 6 days a week, +1 rep most sessions
 //   npm run balance -- casual    -> trains 3 days a week, slower progress
+//   npm run balance -- home      -> steady, but only at home with no equipment (Renz's usual case)
 import { EXERCISES, EXERCISE_BY_ID } from '../src/core/exercises';
-import { AVATAR_STAGES, avatarStage, buildStats, habitTarget, levelFromXp, newUnlocks, sessionXp, currentStreak } from '../src/core/rules';
-import type { Session, WorkSet } from '../src/core/types';
+import { AVATAR_STAGES, avatarStage, buildStats, habitTarget, levelFromXp, newUnlocks, nextUnlockHints, sessionXp, currentStreak } from '../src/core/rules';
+import type { UnlockRule } from '../src/core/types';
+import type { Measure, Session, WorkSet } from '../src/core/types';
 
-const profile = process.argv[2] === 'casual' ? { daysPerWeek: 3, gain: 0.5 } : { daysPerWeek: 6, gain: 1 };
+const mode = process.argv[2] ?? 'steady';
+const profile = mode === 'casual' ? { daysPerWeek: 3, gain: 0.5 } : { daysPerWeek: 6, gain: 1 };
+// Gym access for steady/casual; nothing for home.
+const GYM = ['dumbbell', 'pullup_bar', 'barbell', 'bench', 'treadmill', 'resistance_band', 'squat_rack', 'cable_machine', 'dip_bars', 'jump_rope', 'ab_wheel'];
+const EQUIP = mode === 'home' ? [] : GYM;
 const DAYS = 90;
 const DAY = 86_400_000;
 const start = new Date(2026, 0, 5, 18).getTime(); // a Monday
@@ -19,10 +25,11 @@ const sets: WorkSet[] = [];
 const best: Record<string, number> = {};
 let id = 0;
 
-const firstVal = (metric: string) => (metric === 'time' ? 20 : metric === 'distance' ? 1 : metric === 'weight_reps' ? 10 : 5);
-const step = (metric: string) => (metric === 'time' ? 5 : metric === 'distance' ? 0.1 : metric === 'weight_reps' ? 0.5 : 1);
+const firstVal = (m: Measure) => (m === 'time' ? 20 : m === 'distance' ? 1 : m === 'weight' ? 10 : 5);
+const step = (m: Measure) => (m === 'time' ? 5 : m === 'distance' ? 0.1 : m === 'weight' ? 0.5 : 1);
+const done: Record<string, number> = {};
 
-console.log(`Profile: ${process.argv[2] ?? 'steady'} (${profile.daysPerWeek} days/week)\n`);
+console.log(`Profile: ${mode} (${profile.daysPerWeek} days/week, equipment: ${EQUIP.length ? 'gym' : 'none'})\n`);
 console.log('Day  Lvl  Stage      Goal  Unlocked this day');
 for (let d = 0; d < DAYS; d++) {
   if (d % 7 >= profile.daysPerWeek) continue;
@@ -31,21 +38,29 @@ for (let d = 0; d < DAYS; d++) {
   const sid = `s${id++}`;
   // Do up to 4 unlocked bodyweight/cardio + dumbbell moves (gym access), 2 sets each.
   // Rotate through what this user can do (gym with dumbbells, bar, barbell, bench, treadmill), 4 moves a session.
-  const pool = unlocked.filter((x) => !EXERCISE_BY_ID[x].equipment.some((e) => !['dumbbell', 'pullup_bar', 'barbell', 'bench', 'treadmill'].includes(e)));
-  const todays = Array.from({ length: Math.min(4, pool.length) }, (_, k) => pool[(sessions.length * 4 + k) % pool.length]).filter((x, i, a) => a.indexOf(x) === i);
+  const pool = unlocked.filter((x) => EXERCISE_BY_ID[x].equipment.every((e) => EQUIP.includes(e)));
+  // Like a real user who reads the "next unlock" hints: up to 2 moves named in the closest record gates,
+  // then fill to 4 by rotating through everything else.
+  const recIds = (r: UnlockRule): string[] => (r.type === 'record' ? [r.exerciseId] : r.type === 'all' || r.type === 'any' ? r.rules.flatMap(recIds) : []);
+  const hinted = [...new Set(nextUnlockHints(unlocked, buildStats(sessions, sets, xp, now), 4).flatMap((h) => recIds(h.exercise.unlock)))].filter((x) => pool.includes(x)).slice(0, 2);
+  const rest = pool.filter((x) => !hinted.includes(x));
+  const todays = [...hinted, ...Array.from({ length: Math.min(4 - hinted.length, rest.length) }, (_, k) => rest[(sessions.length * 4 + k) % rest.length])].filter((x, i, a) => a.indexOf(x) === i);
   let prs = 0;
   for (const exId of todays) {
     const ex = EXERCISE_BY_ID[exId];
     const prev = best[exId] ?? 0;
-    const v = prev ? Math.round((prev + step(ex.metric) * profile.gain) * 10) / 10 : firstVal(ex.metric);
+    const main = ex.measures[0];
+    const v = prev ? Math.round((prev + step(main) * profile.gain) * 10) / 10 : firstVal(main);
     if (prev && v > prev) prs++;
     best[exId] = Math.max(prev, v);
+    done[exId] = (done[exId] ?? 0) + 1;
     for (let k = 0; k < 2; k++) {
       const s: WorkSet = { id: `w${id++}`, sessionId: sid, exerciseId: exId, at: now + k, isPR: false, updatedAt: 0 };
-      if (ex.metric === 'reps') s.reps = v;
-      if (ex.metric === 'time') s.seconds = v;
-      if (ex.metric === 'weight_reps') Object.assign(s, { weightKg: v, reps: 8 });
-      if (ex.metric === 'distance') Object.assign(s, { distanceKm: v, durationSec: v * 420 });
+      if (main === 'reps') s.reps = v;
+      if (main === 'time') s.seconds = v;
+      // Weighted moves: reps climb 8 -> 12 (double progression), so rep-based gates can be met.
+      if (main === 'weight') Object.assign(s, { weightKg: v, reps: Math.min(12, 8 + Math.floor(done[exId] * profile.gain / 2)) });
+      if (main === 'distance') Object.assign(s, { distanceKm: v, durationSec: v * 420 });
       sets.push(s);
     }
   }

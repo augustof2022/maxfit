@@ -39,6 +39,7 @@ Details: `docs/PRODUCT-SPEC.md`, `team/DECISIONS.md`.
 | `ux-designer` | Screens, flows, copy, accessibility, phone-first layout | high |
 | `frontend-dev` | React + TypeScript screens, PWA, Capacitor (Android) code | medium |
 | `backend-dev` | Local database (Dexie), Supabase schema, row-level security, sync | medium |
+| `exercise-scientist` | Evidence lead for the dev team: which exercises, difficulty ladder, unlock prerequisites, measures, goal mapping — graded sources in `docs/research/` (added 2026-11-18, Renz said) | high |
 | `fitness-coach` | Exercise science with sources: progressions, rest, form cues, safety, BMI | medium |
 | `qa-tester` | Unit + end-to-end tests, test plans, bug reports with steps | high |
 | `code-reviewer` | Reviews every change for bugs, security, data loss and simplicity before merge | high |
@@ -71,7 +72,9 @@ Details: `docs/PRODUCT-SPEC.md`, `team/DECISIONS.md`.
    `src/core/rules.ts` needs `npm run balance` (steady and casual) and a note of the result.
 9. **Safety first in fitness content.** Form cues are short and safe. Heavy barbell moves say
    "start light" / "use a spotter". No medical advice; BMI is labelled "a rough guide".
-10. **Ripple check.** When Renz corrects one thing, fix it everywhere (code, docs, tests, copy).
+10. **Science first for training content.** New exercises, ladder order, unlock prerequisites and goal logic
+    go through `exercise-scientist` first (Renz said, 2026-11-18: "strategic and science backed, not random").
+11. **Ripple check.** When Renz corrects one thing, fix it everywhere (code, docs, tests, copy).
 
 ## How to run and check
 
@@ -81,7 +84,7 @@ npm run dev          # web app at http://localhost:5173
 npm run typecheck    # TypeScript
 npm test             # unit tests (game engine)  — use TZ=Asia/Manila for Renz's day boundary
 npm run e2e          # end-to-end phone-size browser test + screenshots in test-results/
-npm run balance      # game balance simulator (add "-- casual" for a 3-days-a-week user)
+npm run balance      # game balance simulator ("-- casual" = 3 days a week, "-- home" = no equipment)
 npm run build        # production build (dist/)
 npm run cap:sync     # copy the build into the Android project
 ```
