@@ -3,7 +3,7 @@
 // and a set beats the record when at least one tracked measure goes up and none goes down ("rule A").
 
 import { fmtClock } from './live';
-import type { Exercise, Measure, WorkSet } from './types';
+import type { Beat, Exercise, Measure, WorkSet } from './types';
 
 export const MEASURES: { id: Measure; label: string; unit: string; step: number }[] = [
   { id: 'reps', label: 'Reps', unit: 'reps', step: 1 },
@@ -21,8 +21,38 @@ export const lowerWins = (m: Measure) => m === 'speed';
 
 export type MeasureOverrides = Record<string, Measure[] | undefined>;
 
-/** The measures this user tracks for this exercise: their own choice, or the default. */
-export function measuresFor(ex: Exercise, overrides?: MeasureOverrides | null): Measure[] {
+export const ANY: Beat = { kind: 'any' };
+
+/** The exercise's default way to beat it: its own setting; else weight + reps → same weight, beat reps. */
+export function defaultBeat(ex: Exercise): Beat {
+  if (ex.beat) return ex.beat;
+  if (ex.measures.includes('weight') && ex.measures.includes('reps')) return { kind: 'same', fixed: 'weight', beat: 'reps' };
+  return ANY;
+}
+
+export function beatFor(ex: Exercise, overrides?: Record<string, Beat | undefined> | null): Beat {
+  return overrides?.[ex.id] ?? defaultBeat(ex);
+}
+
+/** In "same" mode: the fixed value of a set (its weight in kg or distance in km), rounded; else null. */
+export function levelOf(beat: Beat, s: Partial<WorkSet>): number | null {
+  if (beat.kind !== 'same') return null;
+  return Math.round(measureValue(s, beat.fixed) * 1000) / 1000;
+}
+
+/** "at 30 kg", "over 100 m". */
+export function fmtLevel(beat: Beat, level: number): string {
+  if (beat.kind !== 'same') return '';
+  return beat.fixed === 'weight' ? `at ${level} kg` : `over ${fmtDistance(level)}`;
+}
+
+export function fmtDistance(km: number): string {
+  return km > 0 && km < 1 ? `${Math.round(km * 1000)} m` : `${km} km`;
+}
+
+/** The measures this user tracks for this exercise: their own choice, or the default. In "same" mode: [fixed, beat]. */
+export function measuresFor(ex: Exercise, overrides?: MeasureOverrides | null, beat?: Beat): Measure[] {
+  if (beat?.kind === 'same') return [beat.fixed, beat.beat];
   // 'time' (longer wins) and 'speed' (faster wins) are the same number, so never both.
   const raw = overrides?.[ex.id]?.filter((m) => ORDER.includes(m));
   const own = raw?.filter((m) => !(m === 'time' && raw.includes('speed')));
@@ -89,7 +119,7 @@ function fmtOne(m: Measure, v: number, short: boolean): string {
       return `${fmtClock(t)}${tenth ? `.${tenth}` : ''}`;
     }
     case 'distance':
-      return `${v} km`;
+      return fmtDistance(v);
     case 'weight':
       return `${v} kg`;
   }
@@ -107,7 +137,7 @@ export function fmtValues(ms: Measure[], s: Partial<WorkSet>, short = false): st
   const tm = ms.includes('time') ? 'time' : ms.includes('speed') ? 'speed' : null;
   if (ms.includes('distance') && tm) {
     const rest = shown.filter((m) => m !== 'distance' && m !== tm).map((m) => fmtOne(m, measureValue(s, m), true));
-    return [`${measureValue(s, 'distance')} km in ${fmtOne(tm, measureValue(s, tm), true)}`, ...rest].join(' · ');
+    return [`${fmtDistance(measureValue(s, 'distance'))} in ${fmtOne(tm, measureValue(s, tm), true)}`, ...rest].join(' · ');
   }
   if (ms.includes('weight') && ms.includes('reps')) {
     const rest = shown.filter((m) => m !== 'weight' && m !== 'reps').map((m) => fmtOne(m, measureValue(s, m), true));
@@ -125,7 +155,7 @@ export function iconFor(ms: Measure[]): string {
   return MEASURE_ICON[ms[0]];
 }
 
-/** Uses the run / walk / rest tracker when the user tracks distance. */
-export function isCardioFlow(ms: Measure[]): boolean {
-  return ms.includes('distance');
+/** Uses the run / walk / rest tracker when the user tracks distance freely (not a fixed sprint distance). */
+export function isCardioFlow(ms: Measure[], beat: Beat = ANY): boolean {
+  return ms.includes('distance') && !(beat.kind === 'same' && beat.fixed === 'distance');
 }

@@ -145,15 +145,37 @@ describe('records and targets', () => {
     let r = computeRecords([set('db_curl', { weightKg: 10, reps: 9 })]).get('db_curl');
     expect(nextTarget(ex, r)).toMatchObject({ weightKg: 10, reps: 10 });
     r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 })]).get('db_curl')!;
-    const t = nextTarget(ex, r);
+    const t = nextTarget(ex, r); // rule A (mode any): add weight and keep the reps
     expect(t).toMatchObject({ weightKg: 12.5, reps: 12 });
     expect(beats(ex.measures, { weightKg: t.weightKg, reps: t.reps }, r.bestSet)).toBe(true);
   });
-  it('rule A: heavier with fewer reps is not a record; the best weight is still tracked', () => {
-    const r = computeRecords([set('db_curl', { weightKg: 10, reps: 12 }, 1), set('db_curl', { weightKg: 12.5, reps: 6 }, 2)]).get('db_curl')!;
+  it("same weight, beat reps (Renz's example): 20 kg x 20, then 30 kg x 10 is a NEW WEIGHT record", () => {
+    const ex = EXERCISE_BY_ID.barbell_squat;
+    const sets = [set('barbell_squat', { weightKg: 20, reps: 20 }, 1), set('barbell_squat', { weightKg: 30, reps: 10 }, 2)];
+    expect([...prFlags(sets).values()]).toEqual([false, true]);
+    const r = computeRecords(sets).get('barbell_squat')!;
+    expect(r.levels.get(20)?.reps).toBe(20); // the 20 kg record stays
+    expect(r.bestSet?.weightKg).toBe(30); // the record shown is at the weight used last
+    expect(nextTarget(ex, r, ex.measures, [], r.beat)).toMatchObject({ weightKg: 30, reps: 11 }); // beat 10 at 30 kg
+    // At 20 kg, 20 reps is past the top of the range (12): the target is to move up a weight.
+    expect(nextTarget(ex, r, ex.measures, [], r.beat, 20)).toMatchObject({ weightKg: 22.5, reps: 8 });
+  });
+  it('same weight: a first set at a LIGHTER weight is not a record; beating it later at that weight is', () => {
+    const sets = [set('db_row', { weightKg: 20, reps: 10 }, 1), set('db_row', { weightKg: 12.5, reps: 15 }, 2), set('db_row', { weightKg: 12.5, reps: 16 }, 3)];
+    expect([...prFlags(sets).values()]).toEqual([false, false, true]);
+  });
+  it('same weight: at the top of the rep range the target is to move up', () => {
+    const ex = EXERCISE_BY_ID.db_row;
+    const r = computeRecords([set('db_row', { weightKg: 10, reps: 12 })]).get('db_row')!;
+    expect(nextTarget(ex, r, ex.measures, ['muscle'], r.beat)).toMatchObject({ weightKg: 12.5, reps: 8 });
+  });
+  it('the user can switch a lift to "beat any number" (rule A): then heavier with fewer reps is not a record', () => {
+    const any = () => ({ kind: 'any' as const });
+    const sets = [set('db_curl', { weightKg: 10, reps: 12 }, 1), set('db_curl', { weightKg: 12.5, reps: 6 }, 2)];
+    expect([...prFlags(sets, undefined, any).values()]).toEqual([false, false]);
+    const r = computeRecords(sets, undefined, any).get('db_curl')!;
     expect(r.bestSet?.weightKg).toBe(10);
     expect(r.bests.weight).toBe(12.5);
-    expect(r.best).toBe(12.5); // main measure (weight) best, used by unlocks
   });
   it('rule A: one measure up and none down is a beat', () => {
     expect(beats(['weight', 'reps'], { weightKg: 10, reps: 11 }, { weightKg: 10, reps: 10 })).toBe(true);
@@ -180,15 +202,19 @@ describe('records and targets', () => {
 });
 
 describe('faster time (sprints) and variations (round 2)', () => {
-  it('a sprint record is the LOWEST time; a slower time is not a record', () => {
+  it('sprint: same distance, faster time wins; every distance keeps its own best', () => {
     const ex = EXERCISE_BY_ID.sprint_100m;
-    expect(ex.measures).toEqual(['speed']);
-    const sets = [set('sprint_100m', { seconds: 18.4 }, 1), set('sprint_100m', { seconds: 19.0 }, 2), set('sprint_100m', { seconds: 17.9 }, 3)];
+    expect(ex.beat).toEqual({ kind: 'same', fixed: 'distance', beat: 'speed' });
+    const sets = [
+      set('sprint_100m', { distanceKm: 0.1, seconds: 18.4 }, 1),
+      set('sprint_100m', { distanceKm: 0.1, seconds: 19.0 }, 2),
+      set('sprint_100m', { distanceKm: 0.1, seconds: 17.9 }, 3),
+      set('sprint_100m', { distanceKm: 0.2, seconds: 40 }, 4),
+    ];
+    expect([...prFlags(sets).values()]).toEqual([false, false, true, false]); // a new distance just starts its record
     const r = computeRecords(sets).get('sprint_100m')!;
-    expect(r.bestSet?.seconds).toBe(17.9);
-    expect(r.bests.speed).toBe(17.9);
-    expect([...prFlags(sets).values()]).toEqual([false, false, true]);
-    expect(nextTarget(ex, r).seconds).toBeLessThan(17.9);
+    expect(r.levels.get(0.1)?.seconds).toBe(17.9);
+    expect(nextTarget(ex, r, ex.measures, [], r.beat, 0.1).seconds).toBeLessThan(17.9);
   });
   it('a run measured by distance + faster time: same km in less time is a record', () => {
     expect(beats(['distance', 'speed'], { distanceKm: 1, durationSec: 360 }, { distanceKm: 1, durationSec: 420 })).toBe(true);
@@ -206,12 +232,12 @@ describe('faster time (sprints) and variations (round 2)', () => {
     }
   });
   it('a speed challenge asks for a FASTER time, and only a faster time meets it', () => {
-    const records = computeRecords([set('sprint_100m', { seconds: 14.6 })]);
-    const ctx = { unlocked: ['sprint_100m'], cosmetics: COLORS.map((c) => c.id), hadPR: true, records, available: [EXERCISE_BY_ID.sprint_100m] };
+    const records = computeRecords([set('run_1k_time_trial', { seconds: 300 })]);
+    const ctx = { unlocked: ['run_1k_time_trial'], cosmetics: COLORS.map((c) => c.id), hadPR: true, records, available: [EXERCISE_BY_ID.run_1k_time_trial] };
     const ch = Array.from({ length: 200 }, (_, i) => openChest(`c${i}`, ctx)).find((r) => r.kind === 'challenge') as any;
-    expect(ch.challenge.target).toBeLessThan(14.6);
-    expect(challengeMet(ch.challenge, [set('sprint_100m', { seconds: 14.0 })])).toBe(true);
-    expect(challengeMet(ch.challenge, [set('sprint_100m', { seconds: 20 })])).toBe(false);
+    expect(ch.challenge.target).toBeLessThan(300);
+    expect(challengeMet(ch.challenge, [set('run_1k_time_trial', { seconds: 280 })])).toBe(true);
+    expect(challengeMet(ch.challenge, [set('run_1k_time_trial', { seconds: 320 })])).toBe(false);
   });
   it('moves already shown stay visible without their equipment; never-shown ones stay hidden', () => {
     const noGear = (e: any) => e.equipment.length === 0;

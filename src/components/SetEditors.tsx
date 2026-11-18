@@ -1,15 +1,39 @@
 // Shared editors: how an exercise is measured, and correcting / deleting a logged set.
 
 import { useEffect, useState } from 'react';
-import { MEASURES, fmtValues } from '../core/measures';
-import type { Exercise, Measure, WorkSet } from '../core/types';
-import { deleteSet, setExerciseMeasures, updateSet } from '../data/repo';
+import { defaultBeat, MEASURES, fmtValues } from '../core/measures';
+import type { Beat, Exercise, Measure, WorkSet } from '../core/types';
+import { deleteSet, setExerciseTrack, updateSet } from '../data/repo';
 import { confirmAsk } from './Confirm';
 import { Sheet, Stepper } from './ui';
 
-/** Pick one or more measures for an exercise (Renz, 2026-11-18). */
-export function MeasureSheet({ ex, current, onClose }: { ex: Exercise; current: Measure[]; onClose: () => void }) {
-  const [pick, setPick] = useState<Measure[]>(current);
+const LABEL = (m: Measure) => MEASURES.find((x) => x.id === m)!.label;
+const FIXED: { id: 'weight' | 'distance'; label: string }[] = [
+  { id: 'weight', label: 'Same weight' },
+  { id: 'distance', label: 'Same distance' },
+];
+const BEATEN: { id: 'reps' | 'time' | 'speed'; label: string }[] = [
+  { id: 'reps', label: 'More reps' },
+  { id: 'time', label: 'Longer time' },
+  { id: 'speed', label: 'Faster time' },
+];
+
+/** "Measured by ..." text for a button. */
+export function trackLabel(ms: Measure[], beat: Beat): string {
+  if (beat.kind === 'same') return `${beat.fixed === 'weight' ? 'Same weight' : 'Same distance'} → ${BEATEN.find((b) => b.id === beat.beat)!.label.toLowerCase()}`;
+  return ms.map(LABEL).join(' + ');
+}
+
+/**
+ * "How do you beat it?" for one exercise (Renz, 2026-11-18: configurable for every exercise).
+ * Mode any: pick the measures; one better, none worse. Mode same: keep weight or distance fixed and beat
+ * reps / longer time / faster time; every weight or distance keeps its own record.
+ */
+export function MeasureSheet({ ex, current, beat, onClose }: { ex: Exercise; current: Measure[]; beat: Beat; onClose: () => void }) {
+  const [mode, setMode] = useState<Beat['kind']>(beat.kind);
+  const [pick, setPick] = useState<Measure[]>(beat.kind === 'any' ? current : ex.measures);
+  const [fixed, setFixed] = useState<'weight' | 'distance'>(beat.kind === 'same' ? beat.fixed : ex.measures.includes('distance') ? 'distance' : 'weight');
+  const [beaten, setBeaten] = useState<'reps' | 'time' | 'speed'>(beat.kind === 'same' ? beat.beat : fixed === 'distance' ? 'speed' : 'reps');
   // Time (longer wins) and Faster time are the same number, so picking one drops the other.
   const toggle = (m: Measure) =>
     setPick((p) => {
@@ -17,42 +41,78 @@ export function MeasureSheet({ ex, current, onClose }: { ex: Exercise; current: 
       const other = m === 'time' ? 'speed' : m === 'speed' ? 'time' : null;
       return [...p.filter((x) => x !== other), m];
     });
-  const same = pick.length === current.length && pick.every((m) => current.includes(m));
+  const next: Beat = mode === 'same' ? { kind: 'same', fixed, beat: beaten } : { kind: 'any' };
+  const unchanged = JSON.stringify(next) === JSON.stringify(beat) && (mode === 'same' || pick.join() === current.join());
+  const describe = mode === 'same' ? `${FIXED.find((f) => f.id === fixed)!.label.toLowerCase()}, ${BEATEN.find((b) => b.id === beaten)!.label.toLowerCase()}` : pick.map(LABEL).join(' + ').toLowerCase();
   const save = async () => {
     const ok = await confirmAsk({
-      title: `Measure ${ex.name} by ${pick.map((m) => MEASURES.find((x) => x.id === m)!.label.toLowerCase()).join(' + ')}?`,
-      body: 'Your records for this exercise are checked again with the new measures. A new record = at least one number up, none down.',
+      title: `Beat ${ex.name} by ${describe}?`,
+      body: 'Your records for this exercise are checked again with the new rule (and the XP of records with them).',
       ok: 'Change',
     });
     if (!ok) return;
-    await setExerciseMeasures(ex.id, pick);
+    await setExerciseTrack(ex.id, next, mode === 'any' ? pick : []);
     onClose();
   };
   return (
     <Sheet onClose={onClose}>
-      <h2>How do you measure {ex.name}?</h2>
-      <p className="small muted">Pick one or more. To beat your record, make at least one better and keep the others the same or better. Time = longer wins (a plank, a long run). Faster time = lower wins (a sprint, a 1 km time trial).</p>
-      <div className="row wrap" role="group" aria-label="Measures">
-        {MEASURES.map((m) => (
-          <button key={m.id} className={`chip ${pick.includes(m.id) ? 'on' : ''}`} aria-pressed={pick.includes(m.id)} onClick={() => toggle(m.id)}>
-            {m.label} <span className="small">({m.id === 'speed' ? 's, lower wins' : m.unit})</span>
-          </button>
-        ))}
+      <h2>How do you beat {ex.name}?</h2>
+      <div className="seg" role="radiogroup" aria-label="How to beat it">
+        <button role="radio" aria-checked={mode === 'any'} className={`chip ${mode === 'any' ? 'on' : ''}`} onClick={() => setMode('any')}>
+          Beat any number
+        </button>
+        <button role="radio" aria-checked={mode === 'same'} className={`chip ${mode === 'same' ? 'on' : ''}`} onClick={() => setMode('same')}>
+          Same ___, beat ___
+        </button>
       </div>
-      <p className="tiny muted">Default: {ex.measures.map((m) => MEASURES.find((x) => x.id === m)!.label).join(' + ')}. Unlock goals always use the default.</p>
+      {mode === 'any' ? (
+        <>
+          <p className="small muted">Pick one or more. A record = at least one number better, none worse. Time = longer wins (a plank, a long run). Faster time = lower wins.</p>
+          <div className="row wrap" role="group" aria-label="Measures">
+            {MEASURES.map((m) => (
+              <button key={m.id} className={`chip ${pick.includes(m.id) ? 'on' : ''}`} aria-pressed={pick.includes(m.id)} onClick={() => toggle(m.id)}>
+                {m.label} <span className="small">({m.id === 'speed' ? 's, lower wins' : m.unit})</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="small muted">Keep one number the same and beat the other. Every weight (or distance) keeps its own record. A heavier weight than ever is a record too, and starts a new count.</p>
+          <div className="seg" role="radiogroup" aria-label="Keep the same">
+            {FIXED.map((f) => (
+              <button key={f.id} role="radio" aria-checked={fixed === f.id} className={`chip ${fixed === f.id ? 'on' : ''}`} onClick={() => setFixed(f.id)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="seg" role="radiogroup" aria-label="Beat">
+            {BEATEN.map((b) => (
+              <button key={b.id} role="radio" aria-checked={beaten === b.id} className={`chip ${beaten === b.id ? 'on' : ''}`} onClick={() => setBeaten(b.id)}>
+                {b.label}
+              </button>
+            ))}
+          </div>
+          <p className="small banner">
+            Example: {fixed === 'weight' ? '20 kg × 20 last time; today 30 kg × 12 = 🏆 new weight. Next time at 30 kg, beat 12 reps.' : 'Your best 100 m is 15.2 s; beat it at 100 m. A 200 m keeps its own best.'}
+          </p>
+        </>
+      )}
+      <p className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
+        Default for {ex.name}: {trackLabel(ex.measures, defaultBeat(ex))}. Unlock goals always use the default numbers.
+      </p>
       <div className="row">
         <button
           className="btn ghost grow"
           onClick={async () => {
-            if (!(await confirmAsk({ title: `Measure ${ex.name} the default way again?`, body: 'Your records for this exercise are checked again.', ok: 'Use default' }))) return;
-            await setExerciseMeasures(ex.id, []);
+            if (!(await confirmAsk({ title: `Beat ${ex.name} the default way again?`, body: 'Your records for this exercise are checked again.', ok: 'Use default' }))) return;
+            await setExerciseTrack(ex.id, null, []);
             onClose();
           }}
-          disabled={current.join() === ex.measures.join()}
         >
           Use default
         </button>
-        <button className="btn primary grow" onClick={save} disabled={pick.length === 0 || same}>
+        <button className="btn primary grow" onClick={save} disabled={(mode === 'any' && pick.length === 0) || unchanged}>
           Save
         </button>
       </div>
@@ -139,13 +199,20 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
 }
 
 /** Inputs for a set, one per measure. Values are kept in a WorkSet-shaped object. */
-export function MeasureInputs({ ms, v, onChange }: { ms: Measure[]; v: Partial<WorkSet>; onChange: (v: Partial<WorkSet>) => void }) {
-  const timeKey: 'seconds' | 'durationSec' = ms.includes('distance') ? 'durationSec' : 'seconds';
+export function MeasureInputs({ ms, v, onChange, beat }: { ms: Measure[]; v: Partial<WorkSet>; onChange: (v: Partial<WorkSet>) => void; beat?: Beat }) {
+  // A fixed distance (sprint) is typed in meters and its time is a plain timed effort, not a cardio duration.
+  const meters = beat?.kind === 'same' && beat.fixed === 'distance';
+  const timeKey: 'seconds' | 'durationSec' = ms.includes('distance') && !meters ? 'durationSec' : 'seconds';
   const tm = ms.includes('speed') ? 'speed' : ms.includes('time') ? 'time' : null;
   return (
     <div className="row wrap">
       {ms.includes('weight') && <Stepper label="Weight" unit="kg" value={v.weightKg ?? 0} step={2.5} onChange={(x) => onChange({ ...v, weightKg: x })} />}
-      {ms.includes('distance') && <Stepper label="Distance" unit="km" value={v.distanceKm ?? 0} step={0.1} onChange={(x) => onChange({ ...v, distanceKm: x })} />}
+      {ms.includes('distance') &&
+        (meters ? (
+          <Stepper label="Distance" unit="m" value={Math.round((v.distanceKm ?? 0) * 1000)} step={50} onChange={(x) => onChange({ ...v, distanceKm: Math.round(x) / 1000 })} />
+        ) : (
+          <Stepper label="Distance" unit="km" value={v.distanceKm ?? 0} step={0.1} onChange={(x) => onChange({ ...v, distanceKm: x })} />
+        ))}
       {ms.includes('reps') && <Stepper label="Reps" value={v.reps ?? 0} onChange={(x) => onChange({ ...v, reps: Math.round(x) })} />}
       {tm && <DurationInput label={tm === 'speed' ? 'Time (faster wins)' : 'Time'} fine={tm === 'speed'} value={(timeKey === 'durationSec' ? v.durationSec : v.seconds) ?? 0} onChange={(x) => onChange({ ...v, [timeKey]: tm === 'speed' ? x : Math.round(x) })} />}
     </div>

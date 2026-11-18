@@ -5,11 +5,11 @@ import { PlaceEditor } from '../components/PlaceEditor';
 import { cardioTotals, fmtClock, inMode, totals, activeSeconds } from '../core/live';
 import { fmtPace, fmtTarget, GOAL_TARGETS, goalFor, nextTarget, starterPlan, suggestedPlan, type ExRecord } from '../core/rules';
 import { ExerciseDemo } from '../components/ExerciseDemo';
-import { fmtValues, iconFor, isCardioFlow, MEASURES } from '../core/measures';
-import type { Exercise, Goal, LiveMode, Measure, Session, WorkSet } from '../core/types';
+import { fmtLevel, fmtValues, iconFor, isCardioFlow, levelOf } from '../core/measures';
+import type { Beat, Exercise, Goal, LiveMode, Measure, Session, WorkSet } from '../core/types';
 import { cancelCardio, discardSession, finishCardio, finishSession, logSet, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
 import { confirmAsk } from '../components/Confirm';
-import { EditSetSheet, MeasureInputs, MeasureSheet } from '../components/SetEditors';
+import { EditSetSheet, MeasureInputs, MeasureSheet, trackLabel } from '../components/SetEditors';
 import type { Game } from '../data/useGame';
 import { alarm, keepAwake, primeAudio } from '../lib/alarm';
 import { cancelRestAlarm, scheduleRestAlarm } from '../lib/notify';
@@ -129,6 +129,13 @@ function PreSession({ game }: Props) {
 export function fmtRecord(ms: Measure[], r: ExRecord): string {
   const b = r.bestSet;
   if (!b) return '-';
+  const bt = r.beat;
+  if (bt.kind === 'same') {
+    const lvl = levelOf(bt, b)!;
+    const heaviest = bt.fixed === 'weight' && r.maxLevel > lvl ? ` · heaviest ${r.maxLevel} kg` : '';
+    const others = r.levels.size > 1 ? ` · ${r.levels.size} ${bt.fixed === 'weight' ? 'weights' : 'distances'}` : '';
+    return `${fmtValues([bt.beat], b)} ${fmtLevel(bt, lvl)}${heaviest}${others}`;
+  }
   return `${fmtValues(ms, b)}${ms.includes('distance') && r.bestPace ? ` · best pace ${fmtPace(r.bestPace)}/km` : ''}`;
 }
 
@@ -256,6 +263,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
               key={e.id}
               ex={e}
               ms={d.measuresOf(e)}
+              beat={d.beatOf(e)}
               goals={p.goals ?? []}
               known={(id) => d.unlocked.includes(id)}
               rec={d.stats.records.get(e.id)}
@@ -311,14 +319,18 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   );
 }
 
-function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; goals: Goal[]; known: (id: string) => boolean; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
-  const target = nextTarget(ex, rec, ms, goals);
+function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; beat: Beat; goals: Goal[]; known: (id: string) => boolean; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
+  const baseTarget = nextTarget(ex, rec, ms, goals, beat);
   const goal = goalFor(ex, goals);
   // The goal rep range drives targets only for weighted moves, so show it only there.
   const gt = goal && ms.includes('weight') ? GOAL_TARGETS[goal] : null;
   const [demo, setDemo] = useState(false);
-  const fromTarget = (): Partial<WorkSet> => ({ reps: target.reps, seconds: target.seconds, weightKg: target.weightKg, distanceKm: target.distanceKm });
+  const fromTarget = (): Partial<WorkSet> => ({ reps: baseTarget.reps, seconds: baseTarget.seconds, weightKg: baseTarget.weightKg, distanceKm: baseTarget.distanceKm });
   const [v, setV] = useState<Partial<WorkSet>>(fromTarget);
+  // Same-weight / same-distance: the record and the number to beat follow the weight or distance typed now.
+  const typedLevel = levelOf(beat, v);
+  const target = beat.kind === 'same' && typedLevel !== null ? nextTarget(ex, rec, ms, goals, beat, typedLevel) : baseTarget;
+  const levelBest = beat.kind === 'same' && typedLevel !== null ? rec?.levels.get(typedLevel) : rec?.bestSet;
   const [measuring, setMeasuring] = useState(false);
   const [editing, setEditing] = useState<WorkSet | null>(null);
   const [glow, setGlow] = useState(false);
@@ -326,19 +338,24 @@ function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle,
   // Keep inputs on the new target after a record is beaten or the measures change.
   useEffect(() => {
     setV(fromTarget());
-  }, [rec?.bestSet?.id, ms.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rec?.bestSet?.id, ms.join(), JSON.stringify(beat)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const last = rec?.last;
-  const cardio = isCardioFlow(ms);
+  const cardio = isCardioFlow(ms, beat);
   const canLog = ms.some((m) => ((m === 'reps' ? v.reps : m === 'time' || m === 'speed' ? v.seconds : m === 'weight' ? v.weightKg : v.distanceKm) ?? 0) > 0);
   const log = async () => {
-    const values = { reps: ms.includes('reps') ? v.reps : undefined, seconds: ms.includes('time') || ms.includes('speed') ? v.seconds : undefined, weightKg: ms.includes('weight') ? v.weightKg : undefined };
+    const values = {
+      reps: ms.includes('reps') ? v.reps : undefined,
+      seconds: ms.includes('time') || ms.includes('speed') ? v.seconds : undefined,
+      weightKg: ms.includes('weight') ? v.weightKg : undefined,
+      distanceKm: ms.includes('distance') ? v.distanceKm : undefined,
+    };
     const r = await logSet(session.id, ex.id, values);
     if (r.isPR) {
       setGlow(true);
       setTimeout(() => setGlow(false), 1700);
     }
-    onLogged(r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${fmtValues(ms, r.set)}` : `Set logged: ${fmtValues(ms, r.set)}`);
+    onLogged(r.newWeight ? `🏆 NEW WEIGHT! ${ex.name}: ${fmtValues(ms, r.set)}` : r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${fmtValues(ms, r.set)}` : `Set logged: ${fmtValues(ms, r.set)}`);
   };
 
   return (
@@ -361,8 +378,8 @@ function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle,
               <b className="num">{last ? fmtValues(ms, last, true) : '-'}</b>
             </div>
             <div>
-              <span className="tiny muted">Record</span>
-              <b className="num">{rec?.bestSet ? fmtValues(ms, rec.bestSet, true) : '-'}</b>
+              <span className="tiny muted">{beat.kind === 'same' && typedLevel !== null ? `Record ${fmtLevel(beat, typedLevel).replace(/^(at|over) /, '')}` : 'Record'}</span>
+              <b className="num">{levelBest ? fmtValues(beat.kind === 'same' ? [beat.beat] : ms, levelBest, true) : beat.kind === 'same' ? 'new' : '-'}</b>
             </div>
             <div className="target">
               <span className="tiny muted">Beat this</span>
@@ -381,7 +398,7 @@ function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle,
               ▶ How to do it
             </button>
             <button className="btn ghost icon-btn" onClick={() => setMeasuring(true)}>
-              📏 {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join(' + ')}
+              📏 {trackLabel(ms, beat)}
             </button>
           </div>
 
@@ -391,7 +408,7 @@ function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle,
             </button>
           ) : (
             <>
-              <MeasureInputs ms={ms} v={v} onChange={setV} />
+              <MeasureInputs ms={ms} v={v} onChange={setV} beat={beat} />
               <button className="btn primary big" onClick={log} disabled={!canLog}>
                 Log set + rest
               </button>
@@ -414,7 +431,7 @@ function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle,
           )}
         </>
       )}
-      {measuring && <MeasureSheet ex={ex} current={ms} onClose={() => setMeasuring(false)} />}
+      {measuring && <MeasureSheet ex={ex} current={ms} beat={beat} onClose={() => setMeasuring(false)} />}
       {demo && <ExerciseDemo ex={ex} known={known} onClose={() => setDemo(false)} />}
       {editing && <EditSetSheet ex={ex} ms={ms} set={editing} onClose={() => setEditing(null)} />}
     </div>
@@ -434,7 +451,7 @@ function CardioPanel({ session, game, now, toast }: { session: Session; game: Ga
   const rec = game.d!.stats.records.get(ex.id);
   const c = cardioTotals(live, now)!;
   const total = c.run + c.walk + c.rest;
-  const target = nextTarget(ex, rec, ms, game.profile!.goals ?? []);
+  const target = nextTarget(ex, rec, ms, game.profile!.goals ?? [], game.d!.beatOf(ex));
   const [stopping, setStopping] = useState(false);
   const [km, setKm] = useState(target.distanceKm ?? 1);
   const [reps, setReps] = useState(target.reps ?? 0);

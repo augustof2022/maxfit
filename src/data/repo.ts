@@ -22,10 +22,11 @@ import {
   unlockedFrom,
   XP,
   type ChestReward,
+  type BeatOf,
   type MeasuresOf,
 } from '../core/rules';
-import { beats, measuresFor } from '../core/measures';
-import type { EquipmentCategory, EquipmentId, Focus, Goal, LiveMode, Location, Measure, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
+import { beatFor, levelOf, measuresFor } from '../core/measures';
+import type { Beat, EquipmentCategory, EquipmentId, Focus, Goal, LiveMode, Location, Measure, Profile, Session, Settings, WeightEntry, WorkSet } from '../core/types';
 import { db, uid } from './db';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -81,21 +82,36 @@ export async function updateProfile(patch: Partial<Profile>): Promise<void> {
   await db.profile.update('me', { ...patch, updatedAt: Date.now() });
 }
 
-function measuresOfProfile(p: Profile): MeasuresOf {
-  return (ex) => measuresFor(ex, p.exerciseMeasures);
+function beatOfProfile(p: Profile): BeatOf {
+  return (ex) => beatFor(ex, p.exerciseBeat);
 }
 
-/** Set how this user measures one exercise (empty = back to the default). */
-export async function setExerciseMeasures(exerciseId: string, measures: Measure[]): Promise<void> {
+function measuresOfProfile(p: Profile): MeasuresOf {
+  const beatOf = beatOfProfile(p);
+  return (ex) => measuresFor(ex, p.exerciseMeasures, beatOf(ex));
+}
+
+/**
+ * Set how this user beats one exercise: mode any with these measures, or mode same (fixed + beaten).
+ * null = back to the default. Records and XP are re-checked.
+ */
+export async function setExerciseTrack(exerciseId: string, beat: Beat | null, measures: Measure[]): Promise<void> {
   const p = await getProfile();
   const own = { ...(p.exerciseMeasures ?? {}) };
-  if (measures.length) own[exerciseId] = measures;
+  const beats = { ...(p.exerciseBeat ?? {}) };
+  if (beat) beats[exerciseId] = beat;
+  else delete beats[exerciseId];
+  if (beat?.kind === 'any' && measures.length) own[exerciseId] = measures;
   else delete own[exerciseId];
   await db.transaction('rw', db.profile, db.sets, db.sessions, async () => {
-    await updateProfile({ exerciseMeasures: own });
-    // What counts as a record changed, so re-check the record flags (and their XP).
+    await updateProfile({ exerciseMeasures: own, exerciseBeat: beats });
     await reconcileRecords([exerciseId]);
   });
+}
+
+/** Set how this user measures one exercise in "beat any number" mode (empty = back to the default). */
+export async function setExerciseMeasures(exerciseId: string, measures: Measure[]): Promise<void> {
+  await setExerciseTrack(exerciseId, measures.length ? { kind: 'any' } : null, measures);
 }
 
 export async function setGoals(goals: Goal[], focus: Focus[]): Promise<void> {
@@ -197,6 +213,8 @@ export async function cancelCardio(sessionId: string): Promise<void> {
 export interface LoggedSet {
   set: WorkSet;
   isPR: boolean;
+  /** A record because the weight is heavier than ever. */
+  newWeight?: boolean;
   previousBest: number;
 }
 
@@ -205,15 +223,21 @@ async function allSets(): Promise<WorkSet[]> {
 }
 
 export async function logSet(sessionId: string, exerciseId: string, values: Pick<WorkSet, 'reps' | 'seconds' | 'weightKg' | 'distanceKm' | 'durationSec' | 'runSec' | 'walkSec' | 'restSec'>): Promise<LoggedSet> {
-  const ex = EXERCISE_BY_ID[exerciseId];
-  const measuresOf = measuresOfProfile(await getProfile());
-  const before = computeRecords(await allSets(), measuresOf).get(exerciseId);
+  const prof = await getProfile();
+  const measuresOf = measuresOfProfile(prof);
+  const beatOf = beatOfProfile(prof);
+  const sets = await allSets();
+  const before = computeRecords(sets, measuresOf, beatOf).get(exerciseId);
   const now = Date.now();
   const set: WorkSet = { id: uid(), sessionId, exerciseId, at: now, ...values, isPR: false, updatedAt: now };
-  const isPR = beats(measuresOf(ex), set, before?.bestSet);
+  // The same rules as the record keeper (any: rule A; same: per weight / distance, new weight).
+  const isPR = prFlags([...sets.filter((x) => x.exerciseId === exerciseId), set], measuresOf, beatOf).get(set.id) ?? false;
   set.isPR = isPR;
   await db.sets.put(set);
-  return { set, isPR, previousBest: before?.best ?? 0 };
+  const bt = beatOf(EXERCISE_BY_ID[exerciseId]);
+  const lvl = levelOf(bt, set);
+  const newWeight = isPR && bt.kind === 'same' && bt.fixed === 'weight' && lvl !== null && !before?.levels.has(lvl);
+  return { set, isPR, newWeight, previousBest: before?.best ?? 0 };
 }
 
 /** Ends a cardio block: saves the run as one set, returns to normal session mode. */
@@ -243,9 +267,9 @@ export async function finishCardio(sessionId: string, distanceKm: number, reps?:
  */
 async function reconcileRecords(exerciseIds: string[], removed: WorkSet[] = []): Promise<void> {
   const now = Date.now();
-  const measuresOf = measuresOfProfile(await getProfile());
+  const prof = await getProfile();
   const sets = await allSets();
-  const flags = prFlags(sets, measuresOf);
+  const flags = prFlags(sets, measuresOfProfile(prof), beatOfProfile(prof));
   const delta = new Map<string, { xp: number; prs: number }>();
   const add = (sid: string, xp: number, prs: number) => {
     const d = delta.get(sid) ?? { xp: 0, prs: 0 };
@@ -370,6 +394,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
 
     const allSessions = await db.sessions.toArray();
     const measuresOf = measuresOfProfile(profile);
+    const beatOf = beatOfProfile(profile);
     const xpBefore = totalXp(allSessions);
     const targetBefore = habitTarget(allSessions, profile.habitBaseMin, profile.habitCapMin);
     const today = dayKey(s.startedAt);
@@ -385,8 +410,8 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     const sessionsAfter = allSessions.map((x) => (x.id === id ? finished : x));
     const sets = await allSets();
     // Unlocks before this session: without its sets.
-    const unlockedBefore = unlockedFrom(buildStats(allSessions, sets.filter((x) => x.sessionId !== id), xpBefore, now, measuresOf), allSessions, profile.unlocked);
-    const statsPre = buildStats(sessionsAfter, sets, xpBefore, now, measuresOf);
+    const unlockedBefore = unlockedFrom(buildStats(allSessions, sets.filter((x) => x.sessionId !== id), xpBefore, now, measuresOf, beatOf), allSessions, profile.unlocked);
+    const statsPre = buildStats(sessionsAfter, sets, xpBefore, now, measuresOf, beatOf);
     const streakBonus = firstToday ? Math.min(XP.streakCap, statsPre.streak * XP.perStreakDay) : 0;
     const parts = [
       { label: plural(sessionSets.length, 'set'), xp: sessionSets.length * XP.perSet },
@@ -409,7 +434,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     }
 
     finished.xpEarned = xp;
-    const stats = buildStats(sessionsAfter, sets, xpBefore + xp, now, measuresOf);
+    const stats = buildStats(sessionsAfter, sets, xpBefore + xp, now, measuresOf, beatOf);
     const unlockedMid = unlockedFrom(stats, sessionsAfter, profile.unlocked);
 
     // Mystery chest (surprises lean toward the goal profile)
@@ -436,7 +461,7 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     // Level-ups can open level-based unlocks too.
     finished.xpEarned = xp;
     const sessionsFinal = allSessions.map((x) => (x.id === id ? finished : x));
-    const unlockedAfter = unlockedFrom(buildStats(sessionsFinal, sets, xpBefore + xp, now, measuresOf), sessionsFinal, profile.unlocked);
+    const unlockedAfter = unlockedFrom(buildStats(sessionsFinal, sets, xpBefore + xp, now, measuresOf, beatOf), sessionsFinal, profile.unlocked);
     // Reveal only what the user can do with their equipment; the rest waits until they have it.
     // `revealed` remembers what was shown, so a move earned earlier is revealed once its equipment is added.
     const canDo = (x: string) => fitsEquipment(EXERCISE_BY_ID[x], owned);

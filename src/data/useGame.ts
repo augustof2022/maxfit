@@ -17,7 +17,7 @@ export function useGame() {
     if (!profile) return null;
     const now = Date.now();
     const liveSets = sets.filter((s) => !s.deleted);
-    const { xp, stats, unlocked: unlockedAll, measuresOf } = deriveGame(profile, sessions, liveSets, now);
+    const { xp, stats, unlocked: unlockedAll, measuresOf, beatOf } = deriveGame(profile, sessions, liveSets, now);
     // Only moves the user can do with equipment from any of their places are shown (Renz, 2026-11-18).
     // Others stay hidden until that equipment is added to a place.
     const owned = ownedEquipment(locations);
@@ -38,6 +38,7 @@ export function useGame() {
       owned,
       canDo,
       measuresOf,
+      beatOf,
       xp,
       goalMin: habitTarget(sessions, profile.habitBaseMin, profile.habitCapMin),
       week: dailyTotals(sessions, 7, now),

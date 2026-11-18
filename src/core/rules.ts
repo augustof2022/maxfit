@@ -2,8 +2,8 @@
 // so every rule can be unit-tested. See docs/GAME-DESIGN.md for the "why".
 
 import { EXERCISE_BY_ID, EXERCISES, SECRET_IDS } from './exercises';
-import { beats, fmtValues, hasValue, lowerWins, mainMeasure, MEASURES, measuresFor, measureValue } from './measures';
-import type { Challenge, EquipmentId, Exercise, Focus, Goal, Measure, Session, UnlockRule, WorkSet } from './types';
+import { ANY, beatFor, beats, defaultBeat, fmtLevel, fmtValues, hasValue, levelOf, lowerWins, mainMeasure, MEASURES, measuresFor, measureValue } from './measures';
+import type { Beat, Challenge, EquipmentId, Exercise, Focus, Goal, Measure, Session, UnlockRule, WorkSet } from './types';
 
 // ---------- dates ----------
 
@@ -73,8 +73,17 @@ export interface ExRecord {
   best: number;
   /** Best value of each measure on its own. */
   bests: Partial<Record<Measure, number>>;
-  /** The benchmark ("the record"): the first set, then each set that beat it (rule A). */
+  /**
+   * The benchmark ("the record"). Mode any: the first set, then each set that beat it (rule A).
+   * Mode same: the best set at the level (weight / distance) of the latest set.
+   */
   bestSet: WorkSet | null;
+  /** How this exercise is beaten. */
+  beat: Beat;
+  /** Mode same: best set per level (kg or km). */
+  levels: Map<number, WorkSet>;
+  /** Mode same: the heaviest weight / longest distance ever logged. */
+  maxLevel: number;
   last: WorkSet | null;
   count: number;
   /** cardio only: fastest pace in minutes per km */
@@ -94,13 +103,45 @@ export function pace(s: WorkSet): number | null {
   return s.durationSec / 60 / s.distanceKm;
 }
 
-export function computeRecords(sets: WorkSet[], measuresOf: MeasuresOf = defaultMeasuresOf): Map<string, ExRecord> {
-  const out = new Map<string, ExRecord>();
+export type BeatOf = (ex: Exercise) => Beat;
+export const defaultBeatOf: BeatOf = (ex) => defaultBeat(ex);
+
+/**
+ * One walk through the sets in time order: records and which sets were records (PRs).
+ * Mode any (rule A): a set beats the benchmark when one number is better and none worse.
+ * Mode same: records per level. A set is a record when it beats the best at its own weight / distance,
+ * or when it is the first set at a weight heavier than ever (a new weight). The first set at a new
+ * lighter weight or a new distance just starts that level's record (so dropping the weight cannot farm records).
+ */
+function walk(sets: WorkSet[], measuresOf: MeasuresOf, beatOf: BeatOf) {
+  const records = new Map<string, ExRecord>();
+  const flags = new Map<string, boolean>();
   for (const s of liveSets(sets)) {
     const ex = EXERCISE_BY_ID[s.exerciseId];
     if (!ex) continue;
     const ms = measuresOf(ex);
-    const r: ExRecord = out.get(s.exerciseId) ?? { exerciseId: s.exerciseId, best: 0, bests: {}, bestSet: null, last: null, count: 0, bestPace: null };
+    const bt = beatOf(ex);
+    const r: ExRecord = records.get(s.exerciseId) ?? { exerciseId: s.exerciseId, best: 0, bests: {}, bestSet: null, last: null, count: 0, bestPace: null, beat: bt, levels: new Map(), maxLevel: 0 };
+    let isPR = false;
+    if (bt.kind === 'same') {
+      const lvl = levelOf(bt, s)!;
+      const prev = r.levels.get(lvl);
+      if (prev) {
+        isPR = beats([bt.beat], s, prev);
+        if (isPR) r.levels.set(lvl, s);
+      } else if (hasValue([bt.beat], s)) {
+        isPR = bt.fixed === 'weight' && r.count > 0 && lvl > r.maxLevel;
+        r.levels.set(lvl, s);
+      }
+      if (lvl > r.maxLevel) r.maxLevel = lvl;
+      r.bestSet = r.levels.get(lvl) ?? r.bestSet;
+    } else if (r.bestSet) {
+      isPR = beats(ms, s, r.bestSet);
+      if (isPR) r.bestSet = s;
+    } else if (hasValue(ms, s)) {
+      r.bestSet = s;
+    }
+    flags.set(s.id, isPR);
     r.count++;
     r.last = s;
     for (const m of MEASURES) {
@@ -110,28 +151,20 @@ export function computeRecords(sets: WorkSet[], measuresOf: MeasuresOf = default
       if (cur === undefined || (lowerWins(m.id) ? v < cur : v > cur)) r.bests[m.id] = v;
     }
     r.best = r.bests[mainMeasure(ex)] ?? 0;
-    if (r.bestSet ? beats(ms, s, r.bestSet) : hasValue(ms, s)) r.bestSet = s;
     const p = pace(s);
     if (p !== null && (r.bestPace === null || p < r.bestPace)) r.bestPace = p;
-    out.set(s.exerciseId, r);
+    records.set(s.exerciseId, r);
   }
-  return out;
+  return { records, flags };
 }
 
-/** Which sets are records (beat the benchmark before them). Used again after an edit or delete. */
-export function prFlags(sets: WorkSet[], measuresOf: MeasuresOf = defaultMeasuresOf): Map<string, boolean> {
-  const bench = new Map<string, WorkSet>();
-  const out = new Map<string, boolean>();
-  for (const s of liveSets(sets)) {
-    const ex = EXERCISE_BY_ID[s.exerciseId];
-    if (!ex) continue;
-    const ms = measuresOf(ex);
-    const b = bench.get(s.exerciseId);
-    const isPR = !!b && beats(ms, s, b);
-    out.set(s.id, isPR);
-    if (b ? isPR : hasValue(ms, s)) bench.set(s.exerciseId, s);
-  }
-  return out;
+export function computeRecords(sets: WorkSet[], measuresOf: MeasuresOf = defaultMeasuresOf, beatOf: BeatOf = defaultBeatOf): Map<string, ExRecord> {
+  return walk(sets, measuresOf, beatOf).records;
+}
+
+/** Which sets are records. Used when logging, and again after an edit or delete. */
+export function prFlags(sets: WorkSet[], measuresOf: MeasuresOf = defaultMeasuresOf, beatOf: BeatOf = defaultBeatOf): Map<string, boolean> {
+  return walk(sets, measuresOf, beatOf).flags;
 }
 
 /** What to aim for next set: always "beat the record by a little" (progressive overload). */
@@ -185,11 +218,12 @@ function asSet(t: Target): Partial<WorkSet> {
  * so it always counts as a beat. Weight + reps: add reps up to the top of the range, then add
  * weight and keep the reps (see docs/RESEARCH.md, progression).
  */
-export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[] = ex.measures, goals: Goal[] = []): Target {
-  const b = rec?.bestSet;
+export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[] = ex.measures, goals: Goal[] = [], beat: Beat = ANY, atLevel?: number): Target {
   const has = (m: Measure) => ms.includes(m);
   const g = goalFor(ex, goals);
   const RANGE = g ? { low: GOAL_TARGETS[g].low, high: GOAL_TARGETS[g].high } : REP_RANGE;
+  if (beat.kind === 'same') return sameTarget(beat, rec, RANGE, atLevel);
+  const b = rec?.bestSet;
   if (!b) {
     const t: Target = { label: '' };
     if (has('weight')) t.weightKg = 0;
@@ -242,6 +276,54 @@ export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[
   }
   const others = ms.length > 1 ? ' Keep the other numbers at least the same.' : '';
   t.label = `Beat ${fmtValues(ms, b)}: ${how} → ${fmtValues(ms, asSet(t))}.${others}`;
+  return t;
+}
+
+/** Mode same: beat your best at this weight / distance (by default the one you used last). */
+function sameTarget(bt: Extract<Beat, { kind: 'same' }>, rec: ExRecord | undefined, RANGE: { low: number; high: number }, atLevel?: number): Target {
+  const fixedKey = bt.fixed === 'weight' ? 'weightKg' : 'distanceKm';
+  const lastLevel = rec?.last ? levelOf(bt, rec.last) : null;
+  const level = atLevel ?? lastLevel;
+  if (!rec || level === null) {
+    const t: Target = { label: '' };
+    if (bt.fixed === 'weight') {
+      t.weightKg = 0;
+      t.label = `First time: pick a weight you can lift ${RANGE.low}-${RANGE.high} times with good form. Each weight keeps its own record.`;
+    } else {
+      t.distanceKm = 0.1;
+      t.label = bt.beat === 'speed' ? 'First time: pick a distance (for example 100 m), warm up, go all out once and log your time. Each distance keeps its own record.' : 'First time: pick a distance. Each distance keeps its own record.';
+    }
+    if (bt.beat === 'reps') t.reps = RANGE.low;
+    return t;
+  }
+  const b = rec.levels.get(level);
+  const t: Target = { label: '', [fixedKey]: level } as Target;
+  const at = fmtLevel(bt, level);
+  if (!b) {
+    const heavier = bt.fixed === 'weight' && level > rec.maxLevel;
+    if (bt.beat === 'reps') t.reps = RANGE.low;
+    t.label = heavier ? `New weight ${at}: any good set is a new record and starts your count here.` : `First time ${at}: your first set starts this record.`;
+    return t;
+  }
+  const v = measureValue(b, bt.beat);
+  if (bt.beat === 'reps') {
+    if (bt.fixed === 'weight' && v >= RANGE.high) {
+      // Double progression [Design choice, docs/research/EXERCISE-LADDER.md]: at the top of the range, move up.
+      t.weightKg = round1(level + WEIGHT_STEP_KG);
+      t.reps = RANGE.low;
+      t.label = `Best ${at}: ${v} reps, the top of your range. Move up: ${t.weightKg} kg x ${RANGE.low} is a new-weight record. (Or ${v + 1} reps ${at}.)`;
+    } else {
+      t.reps = v + 1;
+      t.label = `Best ${at}: ${v} reps. Beat it: ${v + 1} reps ${at}.`;
+    }
+  } else if (bt.beat === 'speed') {
+    const step = v < 60 ? 0.2 : v < 600 ? 2 : 10;
+    t.seconds = v - step > 0 ? Math.round((v - step) * 10) / 10 : Math.max(0.01, Math.round(v * 0.95 * 100) / 100);
+    t.label = `Best ${at}: ${fmtValues(['speed'], b)}. Beat it: ${fmtValues(['speed'], { seconds: t.seconds })} ${at}.`;
+  } else {
+    t.seconds = v + 5;
+    t.label = `Best ${at}: ${v}s. Beat it: ${v + 5}s ${at}.`;
+  }
   return t;
 }
 
@@ -343,7 +425,7 @@ export interface GameStats {
   records: Map<string, ExRecord>;
 }
 
-export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now: number, measuresOf: MeasuresOf = defaultMeasuresOf): GameStats {
+export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now: number, measuresOf: MeasuresOf = defaultMeasuresOf, beatOf: BeatOf = defaultBeatOf): GameStats {
   const done = doneSessions(sessions);
   return {
     streak: currentStreak(sessions, now),
@@ -351,17 +433,18 @@ export function buildStats(sessions: Session[], sets: WorkSet[], xp: number, now
     sessions: done.length,
     level: levelFromXp(xp),
     totalMinutes: Math.floor(done.reduce((t, s) => t + s.activeSec + s.restSec, 0) / 60),
-    records: computeRecords(sets, measuresOf),
+    records: computeRecords(sets, measuresOf, beatOf),
   };
 }
 
 /** Everything derived from the data in one call: XP, stats and unlocks. */
-export function deriveGame(profile: { unlocked: string[]; exerciseMeasures?: Record<string, Measure[]> }, sessions: Session[], sets: WorkSet[], now: number) {
-  const measuresOf: MeasuresOf = (ex) => measuresFor(ex, profile.exerciseMeasures);
+export function deriveGame(profile: { unlocked: string[]; exerciseMeasures?: Record<string, Measure[]>; exerciseBeat?: Record<string, Beat> }, sessions: Session[], sets: WorkSet[], now: number) {
+  const beatOf: BeatOf = (ex) => beatFor(ex, profile.exerciseBeat);
+  const measuresOf: MeasuresOf = (ex) => measuresFor(ex, profile.exerciseMeasures, beatOf(ex));
   const xp = totalXp(sessions);
-  const stats = buildStats(sessions, sets, xp, now, measuresOf);
+  const stats = buildStats(sessions, sets, xp, now, measuresOf, beatOf);
   const unlocked = unlockedFrom(stats, sessions, profile.unlocked);
-  return { xp, stats, unlocked, measuresOf };
+  return { xp, stats, unlocked, measuresOf, beatOf };
 }
 
 /** Progress toward a rule as current / needed (needed > 0). Unlocks use bestStreak so a rule met once stays met. */
@@ -650,7 +733,8 @@ export function openChest(
     return !ctx.unlocked.includes(id) && (!e.requires || ctx.unlocked.includes(e.requires)) && (!ctx.owned || fitsEquipment(e, ctx.owned));
   });
   const lockedColors = COLORS.filter((c) => c.id !== 'ember' && !ctx.cosmetics.includes(c.id));
-  const challengeable = ctx.available.filter((e) => (ctx.records.get(e.id)?.best ?? 0) > 0 && mainMeasure(e) !== 'weight');
+  // Challenges use one plain number, so not for weight moves or "same distance" moves (sprints).
+  const challengeable = ctx.available.filter((e) => (ctx.records.get(e.id)?.best ?? 0) > 0 && mainMeasure(e) !== 'weight' && defaultBeat(e).kind === 'any');
 
   const roll = rnd();
   // A PR makes a "special" reward more likely: XP only on a low roll.

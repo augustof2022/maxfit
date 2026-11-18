@@ -22,6 +22,14 @@ export interface EquipmentItem {
  */
 export type Measure = 'reps' | 'time' | 'speed' | 'distance' | 'weight';
 
+/**
+ * How a record is beaten (Renz, 2026-11-18: "configurable for every exercise").
+ * any  = at least one tracked number better, none worse (rule A). A run: farther or longer.
+ * same = keep one number fixed (weight or distance) and beat the other. Records are kept per weight or
+ *        per distance: 20 kg x 20 and 30 kg x 12 are separate records; a heavier weight than ever is a record.
+ */
+export type Beat = { kind: 'any' } | { kind: 'same'; fixed: 'weight' | 'distance'; beat: 'reps' | 'time' | 'speed' };
+
 /** Body areas the user can focus on. */
 export type Focus = 'chest' | 'back' | 'shoulders' | 'arms' | 'core' | 'legs' | 'cardio';
 
@@ -55,6 +63,8 @@ export interface Exercise {
   focus: Focus[];
   /** The move this one is a variation or regression of (shown as "Variation of ..."). */
   base?: string;
+  /** Default "how to beat it" (else: weight + reps → same weight, beat reps; others → any). */
+  beat?: Beat;
   /** Secrets: a chest can only give it once this exercise is unlocked. */
   requires?: string;
   /** free-exercise-db id (public domain) whose 2 photos are bundled in public/demos/. */
@@ -104,6 +114,8 @@ export interface Profile {
   focus?: Focus[];
   /** The user's own choice of measures per exercise id. */
   exerciseMeasures?: Record<string, Measure[]>;
+  /** The user's own "how to beat it" per exercise id. */
+  exerciseBeat?: Record<string, Beat>;
   avatarStyle?: AvatarStyle;
   /**
    * Moves already shown to the user. They stay in the inventory even if the equipment for them is
