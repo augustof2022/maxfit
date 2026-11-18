@@ -41,3 +41,13 @@ describe('sync merge', () => {
     expect(m).toMatchObject({ name: 'Renz', unlocked: ['push_up'], cosmetics: ['ember'], resetAt: 500, updatedAt: 999 });
   });
 });
+
+import { isTableNotAllowed } from './merge';
+describe('sync: a table the server does not know yet', () => {
+  it('a check violation on the table list is recognised, other errors are not', () => {
+    expect(isTableNotAllowed({ code: '23514', message: 'new row violates check constraint "maxfit_rows_tbl_check"' })).toBe(true);
+    expect(isTableNotAllowed({ message: 'violates check constraint "maxfit_rows_tbl_check"' })).toBe(true);
+    expect(isTableNotAllowed({ code: '42501', message: 'permission denied' })).toBe(false);
+    expect(isTableNotAllowed(null)).toBe(false);
+  });
+});

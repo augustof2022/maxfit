@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureSeed, migrateRecords, type SessionSummary } from './data/repo';
 import { useGame } from './data/useGame';
 import { Toast } from './components/ui';
 import { ConfirmHost } from './components/Confirm';
 import { UpdateBar } from './components/UpdateBar';
+import { celebrate, CelebrateHost, rewardKey, type Reward } from './components/Celebrate';
+import { avatarStage, gearFor } from './core/rules';
 import { Home } from './screens/Home';
 import { Train } from './screens/Train';
 import { Progress } from './screens/Progress';
@@ -22,6 +24,23 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'body', label: 'Body', icon: 'M12 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM6 21l2-9h8l2 9M8 12l-3-2M16 12l3-2' },
   { id: 'settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-2-4-2 1-2-1V5h-4v2l-2 1-2-1-2 4 2 1v0l-2 1 2 4 2-1 2 1v2h4v-2l2-1 2 1 2-4z' },
 ];
+
+/** Reward cards already shown in a session, kept for this tab (survives a reload). */
+function loadShown(sessionId: string): string[] {
+  try {
+    return JSON.parse(sessionStorage.getItem(`shown:${sessionId}`) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+function saveShown(sessionId: string | null, shown: Set<string>) {
+  if (!sessionId) return;
+  try {
+    sessionStorage.setItem(`shown:${sessionId}`, JSON.stringify([...shown]));
+  } catch {
+    /* storage off: only a repeat card at worst */
+  }
+}
 
 export default function App() {
   const game = useGame();
@@ -65,7 +84,50 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // Grand unlock moments (Renz, 2026-11-18). Mid-session: anything newly unlocked (a record can unlock
+  // an exercise, and with it new gear) is shown at once. At the end: the rest (streak / session unlocks,
+  // level-ups). Each reward is shown once per session.
+  const seen = useRef<{ session: string | null; shown: Set<string>; unlocked: Set<string> | null; gear: Set<string> | null }>({ session: null, shown: new Set(), unlocked: null, gear: null });
+  const d = game.d;
+  useEffect(() => {
+    if (!d) return;
+    const st = seen.current;
+    const prevU = st.unlocked;
+    const prevG = st.gear;
+    st.unlocked = new Set(d.unlocked);
+    st.gear = new Set(d.gear);
+    if (!d.active) return;
+    if (st.session !== d.active.id) {
+      // A new session (or the app reloaded mid-session): start counting from what is unlocked now, and
+      // remember what this session already showed, so a reload never shows a card twice.
+      st.session = d.active.id;
+      st.shown = new Set(loadShown(d.active.id));
+      return;
+    }
+    if (!prevU || !prevG) return;
+    const out: Reward[] = [
+      ...d.unlocked.filter((id) => !prevU.has(id)).map((exerciseId): Reward => ({ kind: 'exercise', exerciseId })),
+      ...d.gear.filter((g) => !prevG.has(g)).map((gearId): Reward => ({ kind: 'gear', gearId })),
+    ].filter((r) => !st.shown.has(rewardKey(r)));
+    out.forEach((r) => st.shown.add(rewardKey(r)));
+    if (out.length) {
+      saveShown(st.session, st.shown);
+      celebrate(out);
+    }
+  }, [d]);
+
   const onFinished = (s: SessionSummary) => {
+    const st = seen.current;
+    const before = game.d;
+    const out: Reward[] = s.unlocked.map((exerciseId): Reward => ({ kind: 'exercise', exerciseId }));
+    if (before) {
+      const count = new Set([...before.unlocked, ...s.unlocked]).size;
+      for (const gearId of gearFor(count)) if (!before.gear.includes(gearId)) out.push({ kind: 'gear', gearId });
+    }
+    if (s.levelAfter > s.levelBefore) out.push({ kind: 'level', level: s.levelAfter, stageFrom: avatarStage(s.levelBefore), stageTo: avatarStage(s.levelAfter) });
+    const fresh = out.filter((r) => !st.shown.has(rewardKey(r)));
+    fresh.forEach((r) => st.shown.add(rewardKey(r)));
+    if (fresh.length) celebrate(fresh);
     setSummary(s);
     if (syncConfigured) void syncNow().catch(() => undefined);
   };
@@ -95,10 +157,12 @@ export default function App() {
       </nav>
       {toast && <Toast text={toast} onDone={clearToast} />}
       <ConfirmHost />
+      <CelebrateHost game={game} />
       {summary && (
         <Summary
           s={summary}
           avatarStyle={game.profile.avatarStyle}
+          gender={game.profile.gender}
           measuresOf={game.d.measuresOf}
           onClose={() => {
             setSummary(null);

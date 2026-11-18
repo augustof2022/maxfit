@@ -39,6 +39,9 @@ export type Goal = 'lose_weight' | 'lean' | 'muscle' | 'strength' | 'stamina';
 /** Avatar look (Settings). */
 export type AvatarStyle = 'athlete' | 'line' | 'buddy';
 
+/** Profile gender (Renz, 2026-11-18: Male / Female only). Female gives a female avatar body. */
+export type Gender = 'male' | 'female';
+
 export type UnlockRule =
   | { type: 'start' }
   | { type: 'streak'; days: number }
@@ -117,6 +120,8 @@ export interface Profile {
   /** The user's own "how to beat it" per exercise id. */
   exerciseBeat?: Record<string, Beat>;
   avatarStyle?: AvatarStyle;
+  /** Male / Female (undefined = not set yet, shown as male). */
+  gender?: Gender;
   /**
    * Moves already shown to the user. They stay in the inventory even if the equipment for them is
    * removed later (shown as "needs equipment"); moves earned but never doable stay hidden until the
@@ -160,6 +165,8 @@ export interface Session {
   prs: number;
   /** Secret exercise this session's mystery chest gave (deleting the session locks it again). */
   chestSecret?: string;
+  /** The exercise plan this session was started from (null / missing = a free session). */
+  planId?: string | null;
   live: LiveState | null;
   updatedAt: number;
   deleted?: boolean;
@@ -204,6 +211,40 @@ export interface Photo {
   size: 'story' | 'post';
   /** Stat lines shown on the photo, as text at the time it was made. */
   stats: { key: string; label: string; value: string }[];
+  /** "I did" lines (e.g. "Push-ups · 25 reps"), as text at the time it was made. */
+  did?: { mode: 'all' | 'records'; lines: string[] };
   note: string;
   updatedAt: number;
+}
+
+/** The target for one exercise in a plan. Only the numbers the user set. */
+export interface PlanTarget {
+  reps?: number;
+  seconds?: number;
+  weightKg?: number;
+  distanceKm?: number;
+}
+
+export interface PlanItem {
+  exerciseId: string;
+  sets: number;
+  target: PlanTarget;
+}
+
+/**
+ * A saved exercise plan for one place (Renz, 2026-11-18). Import and duplicate make a full COPY
+ * (new id, own items), so editing a copy never changes the original.
+ */
+export interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  locationId: string;
+  items: PlanItem[];
+  createdAt: number;
+  /** Not used any more (kept for rows already saved): last used comes from sessions, last viewed is per device. */
+  lastUsedAt: number | null;
+  lastViewedAt: number | null;
+  updatedAt: number;
+  deleted?: boolean;
 }

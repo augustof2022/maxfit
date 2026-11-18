@@ -2,6 +2,7 @@ import type { Tab } from '../App';
 import { Avatar } from '../components/Avatar';
 import { Bar, CountUp, WeekChart } from '../components/ui';
 import { GoalPicker } from '../components/GoalPicker';
+import { DoneExercises } from '../components/ExerciseHistory';
 import { EXERCISE_BY_ID, EXERCISES } from '../core/exercises';
 import { fmtValues, mainMeasure } from '../core/measures';
 import { AVATAR_STAGES, COLORS, nextUnlockHints, STARTER_SESSIONS, dayKey } from '../core/rules';
@@ -32,7 +33,7 @@ export function Home({ game, go }: { game: Game; go: (t: Tab) => void }) {
       </div>
 
       <section className="card row" aria-label="Your avatar">
-        <Avatar stage={d.stage} gear={d.gear} color={color} size={120} style={p.avatarStyle} action={d.active ? 'run' : 'life'} />
+        <Avatar stage={d.stage} gear={d.gear} color={color} size={120} style={p.avatarStyle} gender={p.gender} action={d.active ? 'run' : 'life'} />
         <div className="grow stack" style={{ gap: 6 }}>
           <span className="tiny muted">{AVATAR_STAGES[d.stage].name}</span>
           <h2>Level <CountUp value={d.level} /></h2>
@@ -64,6 +65,8 @@ export function Home({ game, go }: { game: Game; go: (t: Tab) => void }) {
           {d.active ? 'Continue session' : 'Start session'}
         </button>
       </section>
+
+      <DoneExercises game={game} limit={4} />
 
       {needsGoals && (
         <section className="card stack" aria-label="Your goals">

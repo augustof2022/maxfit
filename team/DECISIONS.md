@@ -23,3 +23,6 @@
 | 2026-11-18 | Demos = public-domain photos + avatar + YouTube search | Avatar only; hand-picked video links | maxfit-pm | Clear, offline, no broken or made-up links |
 | 2026-11-18 | "How to beat it" per exercise: any (rule A) or same weight/distance (records per level; heavier = record) | Rule A only; one combined score | Renz | A heavier weight lowers reps; that must count as progress |
 | 2026-11-18 | One Sprint exercise; the user picks the distance; best time per distance | Fixed 100 m | Renz (Q25) | Any distance, own records |
+| 2026-11-18 | Round 4: plans are a new synced table `plans` (soft delete, LWW); import / duplicate = deep copy with a new id | Plans inside the profile row; plans linked to the original | maxfit-pm [Design choice] | Copies must never change the original; the profile merge is a union, wrong for edits |
+| 2026-11-18 | Sync skips a newer table the server refuses (check violation) and retries it later | Fail the whole sync | maxfit-pm [Design choice] | Shipping the APK before the cloud update cannot break sync |
+| 2026-11-18 | Grand reward cards: record unlocks mid-session; streak / session / level unlocks when the session ends (that is when they are earned) | Predict unlocks before Finish | maxfit-pm [Design choice] | Honest: a discarded session would take back a predicted unlock |

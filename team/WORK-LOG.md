@@ -53,3 +53,19 @@
   (meta recordRules = 2); empty sets cannot raise the heaviest-weight mark and cannot be logged in "same" mode;
   old sprints without a distance count as 100 m; the reps box follows the typed weight; "at bodyweight" for 0 kg.
 - Checks: 85 unit tests, e2e 31/31.
+
+## 2026-11-18 — Round 4: plans, timer, auto rest, history, grand unlocks, photo "I did", BMI, gender (v0.3.0)
+- Brief from the Chief of Staff, cleared by Boss R (deadline now). Built in the order 3 → 2 → 4 → 1 → 5, items 6–8 in parallel.
+- maxfit-pm (high): plans (core, Dexie v4, repo, sync skip-and-retry, migration file, backup), Plans UI, plan-only session,
+  full-screen timer, Back-to-work FAB + Start set, history (best per day, chart, Last/Best rows on Home/Train/Progress),
+  grand reward cards + detection, e2e extended. frontend-dev (medium): photo "I did", BMI animation, gender + female avatar, wording.
+- Found by looking at screenshots: the FAB covered "Finish session" (spacer added); laurel leaves scattered (SVG transform vs CSS
+  transform-box; fixed); 13+ cards in a row after catch-up (added "Skip the rest"); long equipment text pushed plans down (shortened).
+- Checks: typecheck clean; 101 unit tests (16 new); e2e 47/47 (16 new checks); balance steady L15/57, casual L10/35, home L15/56 (no rule change).
+- Open: Q28 apply the plans migration to Supabase; Q29 per-plan "how to beat"; Q30 time format.
+- Review (code-reviewer, high): changes requested → all fixed: (1) viewing/starting a plan no longer bumps the synced row
+  (last used = from sessions; last viewed = this device only); (2) a Log during rest restarts the rest clock + alarm unless
+  the timer's Stop started it (restartRest); (3) Settings says when plans are phone-only until the cloud update; (4) a backup
+  from before plans keeps today's plans; (5) plans of a deleted place stay importable; (6) timer Cancel after GO asks first,
+  44 px; (7) reward cards remembered per session across a reload; (8) an old photo gets its own day's "I did" lines; (9) BMI rAF.
+- Checks after fixes: 103 unit tests, e2e 47/47. Re-review (code-reviewer): pass; its nit (timer rest flag kept too long) fixed — the flag now belongs to the timed exercise.

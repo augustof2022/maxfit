@@ -4,7 +4,7 @@
 
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { db, SYNC_TABLES, type SyncTable } from '../data/db';
-import { mergeRow } from './merge';
+import { isTableNotAllowed, mergeRow } from './merge';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -133,17 +133,34 @@ async function pull(): Promise<number> {
   return pulled;
 }
 
+/** Tables added after the first release: the server may not accept them yet (migration not applied). */
+const NEWER_TABLES: SyncTable[] = ['plans'];
+
 async function push(startedAt: number): Promise<number> {
   const lastPush = await getMeta<number>('lastPush', 0);
   let pushed = 0;
   for (const tbl of SYNC_TABLES) {
-    const rows = ((await (db[tbl] as any).toArray()) as Row[]).filter((r) => r.updatedAt > lastPush);
+    const newer = NEWER_TABLES.includes(tbl);
+    // A newer table keeps its own push mark, so rows the server refused are sent again next time.
+    const since = newer ? await getMeta<number>(`lastPush:${tbl}`, lastPush) : lastPush;
+    const rows = ((await (db[tbl] as any).toArray()) as Row[]).filter((r) => r.updatedAt > since);
+    let refused = false;
     for (let i = 0; i < rows.length; i += 500) {
       const chunk = rows.slice(i, i + 500).map((r) => ({ tbl, id: r.id, data: r, updated_at: r.updatedAt }));
       // Server-side upsert that only replaces an OLDER row (see supabase/migrations).
       const { error } = await supabase!.rpc('maxfit_push', { rows: chunk });
+      if (error && newer && isTableNotAllowed(error)) {
+        // The cloud has not been updated for this table yet: keep these rows on the phone, sync the rest.
+        refused = true;
+        break;
+      }
       if (error) throw error;
       pushed += chunk.length;
+    }
+    if (newer) {
+      await setMeta(`syncBlocked:${tbl}`, refused);
+      // Refused: keep the old mark (written down, so the shared mark moving on cannot skip these rows).
+      await setMeta(`lastPush:${tbl}`, refused ? since : startedAt);
     }
   }
   await setMeta('lastPush', startedAt);

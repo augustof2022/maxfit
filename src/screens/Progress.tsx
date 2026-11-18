@@ -12,7 +12,8 @@ import { AVATAR_STAGES, COLORS, dayKey, doneSessions, GEAR, nextUnlockHints } fr
 import type { Exercise, Session, WorkSet } from '../core/types';
 import { deleteSession, updateProfile, updateSession } from '../data/repo';
 import type { Game } from '../data/useGame';
-import { fmtRecord } from './Train';
+import { lastBestText } from '../core/format';
+import { DoneExercises, HistorySheet } from '../components/ExerciseHistory';
 
 export function Progress({ game }: { game: Game }) {
   const p = game.profile!;
@@ -24,6 +25,7 @@ export function Progress({ game }: { game: Game }) {
   const needGear = EXERCISES.filter((e) => !d.canDo(e)).length;
   const next = nextUnlockHints(d.unlocked, d.stats, 1, d.canDo)[0];
   const [demo, setDemo] = useState<Exercise | null>(null);
+  const [hist, setHist] = useState<Exercise | null>(null);
   const [measuring, setMeasuring] = useState<Exercise | null>(null);
   const [editSet, setEditSet] = useState<WorkSet | null>(null);
   const [editSession, setEditSession] = useState<Session | null>(null);
@@ -37,7 +39,7 @@ export function Progress({ game }: { game: Game }) {
         <div className="row" style={{ overflowX: 'auto', gap: 4, paddingBottom: 4 }}>
           {AVATAR_STAGES.map((s, i) => (
             <div key={s.name} className="stack" style={{ alignItems: 'center', gap: 2, flex: 'none' }}>
-              <Avatar stage={i} gear={i === d.stage ? d.gear : []} color={color} size={64} silhouette={i > d.stage} style={p.avatarStyle} action={i === d.stage ? 'idle' : 'still'} />
+              <Avatar stage={i} gear={i === d.stage ? d.gear : []} color={color} size={64} silhouette={i > d.stage} style={p.avatarStyle} gender={p.gender} action={i === d.stage ? 'idle' : 'still'} />
               <span className={`tiny ${i === d.stage ? '' : 'muted'}`}>{i > d.stage ? `Lv ${s.minLevel}` : s.name}</span>
             </div>
           ))}
@@ -89,8 +91,10 @@ export function Progress({ game }: { game: Game }) {
         </div>
       </section>
 
+      <DoneExercises game={game} />
+
       <section className="stack" aria-label="Your exercises">
-        <h2>Your exercises</h2>
+        <h2>Your exercise inventory</h2>
         {[1, 2, 3, 4, 5, 6, 0].map((tier) => {
           const mine = EXERCISES.filter((e) => e.tier === tier && unlocked.has(e.id));
           if (!mine.length) return null;
@@ -108,9 +112,11 @@ export function Progress({ game }: { game: Game }) {
                   <div key={e.id} className={`card ex ${d.canDo(e) ? '' : 'locked'}`}>
                     <span className="ico">{iconFor(ms)}</span>
                     <div className="grow stack" style={{ gap: 4 }}>
-                      <b>{e.name}</b>
+                      <button className="linkish" onClick={() => setHist(e)} aria-label={`${e.name} history`}>
+                        <b>{e.name}</b> <span className="small muted">📈</span>
+                      </button>
                       {e.base && EXERCISE_BY_ID[e.base] && unlocked.has(e.base) && <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>Variation of {EXERCISE_BY_ID[e.base].name} · optional</span>}
-                      <span className="small muted">{rec?.bestSet ? `Record ${fmtRecord(ms, rec)} · ${rec.count} sets` : 'Unlocked. Try it next session!'}</span>
+                      <span className="small muted num">{rec?.last ? `${lastBestText(ms, rec)} · ${rec.count} sets` : 'Unlocked. Try it next session!'}</span>
                       {e.equipment.length > 0 && <span className="tiny muted">{d.canDo(e) ? 'Needs' : 'Needs equipment none of your places has'}: {e.equipment.map((id) => equipmentName(id, game.customEquipment)).join(', ')}</span>}
                     </div>
                     <div className="stack" style={{ gap: 6 }}>
@@ -133,7 +139,7 @@ export function Progress({ game }: { game: Game }) {
               🎁
             </span>
             <b>{waiting} surprises waiting</b>
-            <span className="small muted">New moves and variations stay hidden until you unlock them. They are optional: they go into your inventory.</span>
+            <span className="small muted">New exercises and variations stay hidden until you unlock them. They are optional: they go into your inventory.</span>
             {next && (
               <>
                 <Bar value={next.current} max={next.needed} />
@@ -142,7 +148,7 @@ export function Progress({ game }: { game: Game }) {
             )}
           </div>
         )}
-        {needGear > 0 && <p className="small muted">{needGear} more moves need equipment that none of your places has. Add equipment to a place (Settings → My places) and they can come up as surprises too.</p>}
+        {needGear > 0 && <p className="small muted">{needGear} more exercises need equipment that none of your places has. Add equipment to a place (Settings → My places) and they can come up as surprises too.</p>}
       </section>
 
       <section className="card stack" aria-label="History">
@@ -183,6 +189,7 @@ export function Progress({ game }: { game: Game }) {
         })}
       </section>
 
+      {hist && <HistorySheet game={game} ex={hist} onClose={() => setHist(null)} />}
       {demo && <ExerciseDemo ex={demo} known={(id) => unlocked.has(id)} onClose={() => setDemo(null)} />}
       {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} beat={d.beatOf(measuring)} onClose={() => setMeasuring(null)} />}
       {editSet && EXERCISE_BY_ID[editSet.exerciseId] && <EditSetSheet ex={EXERCISE_BY_ID[editSet.exerciseId]} ms={d.measuresOf(EXERCISE_BY_ID[editSet.exerciseId])} beat={d.beatOf(EXERCISE_BY_ID[editSet.exerciseId])} set={editSet} onClose={() => setEditSet(null)} />}

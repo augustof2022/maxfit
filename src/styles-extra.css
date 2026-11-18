@@ -1,0 +1,26 @@
+/* Extra styles (frontend-dev, 2026-11-18). Kept apart from styles.css while the PM edits it. */
+
+/* Body: BMI bar. The marker slides in from 15 and a soft glow grows behind it. */
+.bmi-scale { position: relative; height: 26px; }
+.bmi-bands { display: flex; height: 8px; border-radius: 99px; overflow: hidden; margin-top: 4px; }
+.bmi-fill {
+  position: absolute; left: 0; top: 4px; height: 8px; border-radius: 99px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.12) 60%, rgba(255, 255, 255, 0.42) 100%);
+  box-shadow: 0 0 10px 1px rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+  transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bmi-marker {
+  position: absolute; top: 0; width: 4px; height: 16px; background: #fff; border-radius: 2px;
+  transform: translateX(-2px);
+  box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.45);
+  transition: left 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bmi-ticks { position: relative; height: 14px; margin-top: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bmi-fill, .bmi-marker { transition: none; }
+}
+
+/* Progress photo composer: "I did" options. */
+.did-note { text-transform: none; letter-spacing: 0; }

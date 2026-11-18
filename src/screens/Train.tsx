@@ -4,10 +4,15 @@ import { equipmentName, knownEquipment } from '../core/equipment';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { cardioTotals, fmtClock, inMode, totals, activeSeconds } from '../core/live';
 import { fmtPace, fmtTarget, GOAL_TARGETS, goalFor, nextTarget, starterPlan, suggestedPlan, type ExRecord } from '../core/rules';
+import { fmtRecord, fmtSet, lastBestText } from '../core/format';
+import { fmtPlanItem, hasTarget } from '../core/plans';
+import { PlansSection } from '../components/Plans';
+import { ExerciseRow, HistorySheet } from '../components/ExerciseHistory';
+import { TimerOverlay } from '../components/TimerOverlay';
 import { ExerciseDemo } from '../components/ExerciseDemo';
 import { fmtLevel, fmtValues, iconFor, isCardioFlow, levelOf } from '../core/measures';
-import type { Beat, Exercise, Goal, LiveMode, Measure, Session, WorkSet } from '../core/types';
-import { cancelCardio, discardSession, finishCardio, finishSession, logSet, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
+import type { Beat, Exercise, Goal, LiveMode, Measure, PlanItem, Session, Settings, WorkSet } from '../core/types';
+import { cancelCardio, discardSession, finishCardio, finishSession, logSet, restartRest, setMode, startCardio, startSession, updateProfile, type SessionSummary } from '../data/repo';
 import { confirmAsk } from '../components/Confirm';
 import { EditSetSheet, MeasureInputs, MeasureSheet, trackLabel } from '../components/SetEditors';
 import type { Game } from '../data/useGame';
@@ -55,7 +60,7 @@ function LocationPicker({ game, value, onPick }: { game: Game; value: string | n
   );
 }
 
-function PreSession({ game }: Props) {
+function PreSession({ game, toast }: Props) {
   const d = game.d!;
   const [busy, setBusy] = useState(false);
   const loc = d.location;
@@ -65,12 +70,18 @@ function PreSession({ game }: Props) {
   const plan = starter.length ? starter : goals.length || focus.length ? suggestedPlan(d.available, goals, focus) : [];
   const eqNames = knownEquipment(loc?.equipment ?? [], game.customEquipment).map((id) => equipmentName(id, game.customEquipment));
 
-  const start = async () => {
+  const [hist, setHist] = useState<Exercise | null>(null);
+  // Exercises done before come first (most recent first), so Last and Best are easy to find.
+  const lastDone = new Map<string, number>();
+  for (const x of d.liveSets) if ((lastDone.get(x.exerciseId) ?? 0) < x.at) lastDone.set(x.exerciseId, x.at);
+  const here = [...d.available].sort((a, b) => (lastDone.get(b.id) ?? 0) - (lastDone.get(a.id) ?? 0));
+
+  const start = async (planId: string | null = null) => {
     if (busy) return;
     setBusy(true);
     primeAudio();
     try {
-      await startSession(loc?.id ?? null);
+      await startSession(loc?.id ?? null, planId);
       void keepAwake(true);
     } finally {
       setBusy(false);
@@ -83,8 +94,10 @@ function PreSession({ game }: Props) {
       <section className="card stack">
         <h2>Where are you today?</h2>
         <LocationPicker game={game} value={loc?.id ?? null} onPick={(id) => updateProfile({ lastLocationId: id })} />
-        <p className="small muted">Equipment: {eqNames.length ? eqNames.join(', ') : 'none (bodyweight only)'}. Edit in Settings → My places.</p>
+        <p className="small muted">Equipment: {eqNames.length ? `${eqNames.slice(0, 4).join(', ')}${eqNames.length > 4 ? ` +${eqNames.length - 4} more` : ''}` : 'none (bodyweight only)'}. Edit in Settings → My places.</p>
       </section>
+
+      <PlansSection game={game} location={loc} toast={toast} onStart={(id) => void start(id)} />
 
       {plan.length > 0 && (
         <section className="card stack">
@@ -103,47 +116,26 @@ function PreSession({ game }: Props) {
         </section>
       )}
 
-      <section className="card stack">
+      <section className="card stack" aria-label="Exercises here">
         <h2>You can do here ({d.available.length})</h2>
-        {d.available.map((e) => {
-          const r = d.stats.records.get(e.id);
-          return (
-            <div key={e.id} className="row between">
-              <span>
-                {iconFor(d.measuresOf(e))} {e.name}
-              </span>
-              <span className="small muted num">{r ? `Record ${fmtRecord(d.measuresOf(e), r)}` : 'New'}</span>
-            </div>
-          );
-        })}
+        <p className="small muted">Last and Best for each. Tap one for its history.</p>
+        {here.map((e) => (
+          <ExerciseRow key={e.id} game={game} ex={e} onOpen={setHist} />
+        ))}
       </section>
+      {hist && <HistorySheet game={game} ex={hist} onClose={() => setHist(null)} />}
 
-      <button className="btn primary big" onClick={start} disabled={busy}>
+      <button className="btn primary big" onClick={() => void start()} disabled={busy}>
         Start session
       </button>
+      <p className="small muted" style={{ textAlign: 'center', marginTop: -4 }}>
+        A free session shows every exercise here. A plan shows only its own.
+      </p>
     </div>
   );
 }
 
-/** The record ("the number to beat") in the user's measures, plus best pace for cardio. */
-export function fmtRecord(ms: Measure[], r: ExRecord): string {
-  const b = r.bestSet;
-  if (!b) return '-';
-  const bt = r.beat;
-  if (bt.kind === 'same') {
-    const lvl = levelOf(bt, b)!;
-    const heaviest = bt.fixed === 'weight' && r.maxLevel > lvl ? ` · heaviest ${r.maxLevel} kg` : '';
-    const others = r.levels.size > 1 ? ` · ${r.levels.size} ${bt.fixed === 'weight' ? 'weights' : 'distances'}` : '';
-    return `${fmtValues([bt.beat], b)} ${fmtLevel(bt, lvl)}${heaviest}${others}`;
-  }
-  return `${fmtValues(ms, b)}${ms.includes('distance') && r.bestPace ? ` · best pace ${fmtPace(r.bestPace)}/km` : ''}`;
-}
-
-export function fmtSet(ms: Measure[], s: WorkSet): string {
-  const base = fmtValues(ms, s);
-  if (s.runSec || s.walkSec) return `${base} (run ${fmtClock(s.runSec ?? 0)}, walk ${fmtClock(s.walkSec ?? 0)}, rest ${fmtClock(s.restSec ?? 0)})`;
-  return base;
-}
+export { fmtRecord, fmtSet } from '../core/format';
 
 function ActiveSession({ game, toast, onFinished, session }: Props & { session: Session }) {
   const d = game.d!;
@@ -162,6 +154,13 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   const starter = starterPlan(d.available, d.stats.sessions, p.goals ?? [], p.focus ?? []);
   const plan = (starter.length ? starter : (p.goals ?? []).length || (p.focus ?? []).length ? suggestedPlan(d.available, p.goals ?? [], p.focus ?? []) : []).map((x) => x.exerciseId);
   const ordered = [...d.available].sort((a, b) => Number(plan.includes(b.id)) - Number(plan.includes(a.id)));
+  // Started from a saved plan: show only its exercises, in its order ("Show all exercises here" for the rest).
+  const myPlan = session.planId ? game.plans.find((x) => x.id === session.planId) : undefined;
+  const [showAll, setShowAll] = useState(false);
+  const planItems = (myPlan?.items ?? []).filter((it) => d.unlocked.includes(it.exerciseId) && EXERCISE_BY_ID[it.exerciseId]);
+  const planIds = new Set(planItems.map((it) => it.exerciseId));
+  const others = ordered.filter((e) => !planIds.has(e.id));
+  const [hist, setHist] = useState<Exercise | null>(null);
 
   useEffect(() => {
     void keepAwake(true);
@@ -180,19 +179,35 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
     }
   }, [over, now, p.settings]);
 
-  const goRest = async () => {
+  // Auto work / rest (Renz, 2026-11-18): Start set / the timer = working; Stop / Log = resting.
+  // The timer's Stop starts the rest; the Log right after it keeps that rest. Any other Log while the rest
+  // clock runs (a set done without Start set) starts a fresh rest and re-arms the alarm.
+  // Which exercise's timer started the rest now running (only its own Log keeps that rest).
+  const restFromTimer = useRef<string | null>(null);
+  const goRest = async (timerExercise: string | null = null, loggedExercise: string | null = null) => {
     primeAudio();
-    await setMode(session.id, 'rest');
+    if (timerExercise) {
+      restFromTimer.current = timerExercise;
+      await setMode(session.id, 'rest');
+    } else if (session.live?.mode === 'rest' && loggedExercise && restFromTimer.current === loggedExercise) {
+      restFromTimer.current = null;
+      return;
+    } else {
+      restFromTimer.current = null;
+      await restartRest(session.id);
+    }
     void scheduleRestAlarm(limit);
   };
   const goWork = async () => {
+    primeAudio();
+    restFromTimer.current = null;
     await setMode(session.id, 'exercise');
     void cancelRestAlarm();
   };
 
-  const onLogged = async (msg: string) => {
+  const onLogged = async (msg: string, exerciseId: string) => {
     toast(msg);
-    await goRest();
+    await goRest(null, exerciseId);
   };
 
   const finish = async () => {
@@ -211,6 +226,32 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
     }
   };
 
+  function renderCard(e: Exercise, planItem?: PlanItem) {
+    return (
+      <ExerciseCard
+        key={e.id}
+        ex={e}
+        ms={d.measuresOf(e)}
+        beat={d.beatOf(e)}
+        goals={p.goals ?? []}
+        known={(id) => d.unlocked.includes(id)}
+        rec={d.stats.records.get(e.id)}
+        sets={sessionSets.filter((s) => s.exerciseId === e.id)}
+        open={open === e.id}
+        inPlan={!myPlan && plan.includes(e.id)}
+        planItem={planItem}
+        mode={live.mode}
+        settings={p.settings}
+        onToggle={() => setOpen(open === e.id ? null : e.id)}
+        onHistory={() => setHist(e)}
+        onWork={goWork}
+        onRest={() => goRest(e.id)}
+        session={session}
+        onLogged={onLogged}
+      />
+    );
+  }
+
   // The avatar trains with you: it does the move of the open exercise, runs or walks in cardio, breathes at rest.
   const avAction: AvatarAction = live.cardio ? (live.mode === 'walk' ? 'walk' : live.mode === 'run' ? 'run' : 'idle') : live.mode === 'rest' ? 'idle' : actionFor(open);
   const color = COLORS.find((c) => c.id === p.color)?.hex ?? '#ff7a1a';
@@ -218,9 +259,12 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   return (
     <div className="stack screen">
       <div className="row between">
-        <Avatar stage={d.stage} gear={d.gear} color={color} size={68} style={p.avatarStyle} action={avAction} />
+        <Avatar stage={d.stage} gear={d.gear} color={color} size={68} style={p.avatarStyle} gender={p.gender} action={avAction} />
         <div className="grow">
-          <span className="tiny muted">Session · {game.locations.find((l) => l.id === session.locationId)?.name ?? 'Anywhere'}</span>
+          <span className="tiny muted">
+            Session · {game.locations.find((l) => l.id === session.locationId)?.name ?? 'Anywhere'}
+            {myPlan ? ` · ${myPlan.name}` : ''}
+          </span>
           <div className="clock">{fmtClock(t.exercise + t.rest + t.run + t.walk)}</div>
         </div>
         <div className="stack small num" style={{ gap: 2, textAlign: 'right' }}>
@@ -242,40 +286,52 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
           <div className="clock">
             {fmtClock(restFor)} <span className="muted" style={{ fontSize: 18 }}>/ {fmtClock(limit)}</span>
           </div>
-          <button className="btn primary big" onClick={goWork}>
-            Back to work
-          </button>
+          <p className="small muted">Tap ▶ Back to work (bottom right) or Start set when you go again.</p>
         </div>
       ) : (
         <div className="mode-card work stack">
           <span className="tiny">Working</span>
           <p className="small muted">Log a set below. The rest timer starts by itself.</p>
-          <button className="btn rest big" onClick={goRest}>
+          <button className="btn rest big" onClick={() => void goRest()}>
             Start rest
           </button>
         </div>
       )}
 
-      {!live.cardio && (
-        <section className="stack" aria-label="Exercises">
-          {ordered.map((e) => (
-            <ExerciseCard
-              key={e.id}
-              ex={e}
-              ms={d.measuresOf(e)}
-              beat={d.beatOf(e)}
-              goals={p.goals ?? []}
-              known={(id) => d.unlocked.includes(id)}
-              rec={d.stats.records.get(e.id)}
-              sets={sessionSets.filter((s) => s.exerciseId === e.id)}
-              open={open === e.id}
-              inPlan={plan.includes(e.id)}
-              onToggle={() => setOpen(open === e.id ? null : e.id)}
-              session={session}
-              onLogged={onLogged}
-            />
-          ))}
+      {!live.cardio && myPlan && (
+        <section className="stack" aria-label="Plan exercises">
+          <div className="row between">
+            <h2>📋 {myPlan.name}</h2>
+            <span className="small muted">{planItems.length} exercises</span>
+          </div>
+          {planItems.length === 0 && <p className="small muted">This plan has no exercises you can do now.</p>}
+          {planItems.map((it) => {
+            const e = EXERCISE_BY_ID[it.exerciseId];
+            return renderCard(e, it);
+          })}
+          <button className="btn ghost" onClick={() => setShowAll(!showAll)} aria-expanded={showAll}>
+            {showAll ? 'Hide other exercises' : `Show all exercises here (${others.length} more)`}
+          </button>
         </section>
+      )}
+      {!live.cardio && (!myPlan || showAll) && (
+        <section className="stack" aria-label="Exercises">
+          {myPlan && <h2>Other exercises here</h2>}
+          {(myPlan ? others : ordered).map((e) => renderCard(e))}
+        </section>
+      )}
+      {hist && <HistorySheet game={game} ex={hist} onClose={() => setHist(null)} />}
+
+      {live.mode === 'rest' && !live.cardio && (
+        <button className={`fab-work ${over ? 'over' : ''}`} onClick={goWork} aria-label="Back to work">
+          <span className="fab-ico" aria-hidden>
+            ▶
+          </span>
+          <span className="stack" style={{ gap: 0, alignItems: 'flex-start' }}>
+            <b>Back to work</b>
+            <span className="small num">Rest {fmtClock(restFor)}</span>
+          </span>
+        </button>
       )}
 
       <div className="row">
@@ -287,6 +343,8 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
         </button>
       </div>
       {sessionSets.length === 0 && !live.cardio && <p className="small muted">Log at least one set or a run to finish. Even one set counts!</p>}
+      {/* Room at the bottom so the floating Back to work never covers Finish / Discard. */}
+      {live.mode === 'rest' && !live.cardio && <div className="fab-space" aria-hidden />}
 
       {confirmEnd && (
         <Sheet onClose={() => setConfirmEnd(null)}>
@@ -319,13 +377,38 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   );
 }
 
-function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; beat: Beat; goals: Goal[]; known: (id: string) => boolean; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
+interface CardProps {
+  ex: Exercise;
+  ms: Measure[];
+  beat: Beat;
+  goals: Goal[];
+  known: (id: string) => boolean;
+  rec: ExRecord | undefined;
+  sets: WorkSet[];
+  open: boolean;
+  inPlan: boolean;
+  /** Set when the session runs from a saved plan: its sets and target for this exercise. */
+  planItem?: PlanItem;
+  mode: LiveMode;
+  settings: Settings;
+  onToggle: () => void;
+  onHistory: () => void;
+  onWork: () => Promise<void>;
+  onRest: () => Promise<void>;
+  session: Session;
+  onLogged: (m: string, exerciseId: string) => void;
+}
+
+function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, planItem, mode, settings, onToggle, onHistory, onWork, onRest, session, onLogged }: CardProps) {
   const baseTarget = nextTarget(ex, rec, ms, goals, beat);
+  const planTarget = planItem && hasTarget(planItem.target) ? planItem.target : null;
+  const [timing, setTiming] = useState(false);
   const goal = goalFor(ex, goals);
   // The goal rep range drives targets only for weighted moves, so show it only there.
   const gt = goal && ms.includes('weight') ? GOAL_TARGETS[goal] : null;
   const [demo, setDemo] = useState(false);
-  const fromTarget = (): Partial<WorkSet> => ({ reps: baseTarget.reps, seconds: baseTarget.seconds, weightKg: baseTarget.weightKg, distanceKm: baseTarget.distanceKm });
+  // The plan's own target (when set) goes in the boxes; else the number to beat.
+  const fromTarget = (): Partial<WorkSet> => ({ reps: baseTarget.reps, seconds: baseTarget.seconds, weightKg: baseTarget.weightKg, distanceKm: baseTarget.distanceKm, ...(planTarget ?? {}) });
   const [v, setV] = useState<Partial<WorkSet>>(fromTarget);
   // Same-weight / same-distance: the record and the number to beat follow the weight or distance typed now.
   const typedLevel = levelOf(beat, v);
@@ -349,6 +432,9 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
 
   const last = rec?.last;
   const cardio = isCardioFlow(ms, beat);
+  // Timed exercises (a plank, a sprint) get the full-screen timer; rep exercises get a big Start set.
+  const timed = !cardio && (ms.includes('time') || ms.includes('speed'));
+  const fasterWins = ms.includes('speed');
   const beatenValue = beat.kind === 'same' ? (beat.beat === 'reps' ? v.reps : v.seconds) ?? 0 : 0;
   const sameOk = beat.kind !== 'same' || (beatenValue > 0 && (beat.fixed !== 'distance' || (v.distanceKm ?? 0) > 0));
   const canLog = sameOk && ms.some((m) => ((m === 'reps' ? v.reps : m === 'time' || m === 'speed' ? v.seconds : m === 'weight' ? v.weightKg : v.distanceKm) ?? 0) > 0);
@@ -364,7 +450,7 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
       setGlow(true);
       setTimeout(() => setGlow(false), 1700);
     }
-    onLogged(r.newWeight ? `🏆 NEW WEIGHT! ${ex.name}: ${fmtValues(ms, r.set)}` : r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${fmtValues(ms, r.set)}` : `Set logged: ${fmtValues(ms, r.set)}`);
+    onLogged(r.newWeight ? `🏆 NEW WEIGHT! ${ex.name}: ${fmtValues(ms, r.set)}` : r.isPR ? `🏆 NEW RECORD! ${ex.name}: ${fmtValues(ms, r.set)}` : `Set logged: ${fmtValues(ms, r.set)}`, ex.id);
   };
 
   return (
@@ -374,7 +460,16 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
         <span className="grow">
           <b>{ex.name}</b> {inPlan && <span className="badge">plan</span>}
           <br />
-          <span className="small muted">{rec?.bestSet ? `Record ${fmtRecord(ms, rec)} · Last ${last ? fmtValues(ms, last) : '-'}` : 'No record yet'}</span>
+          <span className="small muted">{lastBestText(ms, rec)}</span>
+          {planItem && (
+            <>
+              <br />
+              <span className="small plan-line">
+                Plan: {fmtPlanItem(planItem, ms)}
+                {sets.length >= planItem.sets ? ' · done ✓' : ` · set ${sets.length + 1} of ${planItem.sets}`}
+              </span>
+            </>
+          )}
         </span>
         <span className="badge num">{sets.length} done</span>
       </button>
@@ -409,6 +504,9 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
             <button className="btn ghost icon-btn" onClick={() => setMeasuring(true)}>
               📏 {trackLabel(ms, beat)}
             </button>
+            <button className="btn ghost icon-btn" onClick={onHistory}>
+              📈 History
+            </button>
           </div>
 
           {cardio ? (
@@ -417,6 +515,19 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
             </button>
           ) : (
             <>
+              {timed ? (
+                <button className="btn primary big start-set" onClick={() => setTiming(true)}>
+                  ▶ Start timer
+                </button>
+              ) : mode === 'exercise' ? (
+                <div className="working-pill" role="status">
+                  ● Set in progress. Log it when you finish.
+                </div>
+              ) : (
+                <button className="btn primary big start-set" onClick={() => void onWork()}>
+                  ▶ Start set
+                </button>
+              )}
               <MeasureInputs ms={ms} v={v} onChange={setV} beat={beat} />
               <button className="btn primary big" onClick={log} disabled={!canLog}>
                 Log set + rest
@@ -439,6 +550,23 @@ function ExerciseCard({ ex, ms, beat, goals, known, rec, sets, open, inPlan, onT
             </div>
           )}
         </>
+      )}
+      {timing && (
+        <TimerOverlay
+          name={ex.name}
+          targetSec={target.seconds}
+          fasterWins={fasterWins}
+          sound={settings.sound}
+          vibrate={settings.vibrate}
+          onGo={() => void onWork()}
+          onStop={(sec) => {
+            // Stop fills the time (still editable before Log) and starts the rest.
+            setV((cur) => ({ ...cur, seconds: sec }));
+            setTiming(false);
+            void onRest();
+          }}
+          onCancel={() => setTiming(false)}
+        />
       )}
       {measuring && <MeasureSheet ex={ex} current={ms} beat={beat} onClose={() => setMeasuring(false)} />}
       {demo && <ExerciseDemo ex={ex} known={known} onClose={() => setDemo(false)} />}

@@ -5,7 +5,7 @@ import { db } from './db';
 import { addEquipment, deleteEquipment, deleteSession, deleteSet, ensureSeed, exportAll, finishSession, importAll, logSet, resetTrainingData, setExerciseMeasures, setExerciseTrack, migrateRecords, setMode, startSession, updateSession, updateSet, updateWeight, addWeight } from './repo';
 
 beforeEach(async () => {
-  await Promise.all([db.photos.clear(), db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear()]);
+  await Promise.all([db.photos.clear(), db.profile.clear(), db.locations.clear(), db.sessions.clear(), db.sets.clear(), db.weights.clear(), db.equipment.clear(), db.meta.clear(), db.plans.clear()]);
   await ensureSeed();
 });
 
@@ -228,5 +228,109 @@ describe('edit and delete (Renz, 2026-11-18)', () => {
     expect((await db.sessions.toArray()).every((x) => x.deleted)).toBe(true);
     expect((await db.sets.toArray()).every((x) => x.deleted)).toBe(true);
     expect((await db.locations.toArray()).filter((l) => !l.deleted)).toHaveLength(2);
+  });
+});
+
+import { addToPlan, deletePlan, duplicatePlan, importPlan, markPlanViewed, restartRest, savePlan } from './repo';
+import { planLastUsed } from '../core/plans';
+import { inMode } from '../core/live';
+import Dexie from 'dexie';
+import { MaxFitDB } from './db';
+
+describe('exercise plans', () => {
+  const draft = { name: 'Push day', description: 'Chest', locationId: 'home', items: [{ exerciseId: 'push_up', sets: 3, target: { reps: 12 } }, { exerciseId: 'run_in_place', sets: 1, target: {} }] };
+
+  it('import from Home into Gym is a copy: editing it leaves the original as it was', async () => {
+    const orig = await savePlan(draft);
+    const copyId = await importPlan(orig, 'gym');
+    expect(copyId).not.toBe(orig);
+    const copy = (await db.plans.get(copyId))!;
+    expect(copy).toMatchObject({ name: 'Push day', locationId: 'gym', lastUsedAt: null });
+    await savePlan({ id: copyId, name: 'Gym push', description: '', locationId: 'gym', items: [{ ...copy.items[1] }, { exerciseId: 'push_up', sets: 5, target: { reps: 20 } }] });
+    const o = (await db.plans.get(orig))!;
+    expect(o.name).toBe('Push day');
+    expect(o.locationId).toBe('home');
+    expect(o.items).toEqual(draft.items);
+  });
+
+  it('duplicate stays in the same place with a "(copy)" name; deleting the copy keeps the original', async () => {
+    const orig = await savePlan(draft);
+    const dup = await duplicatePlan(orig);
+    expect(await db.plans.get(dup)).toMatchObject({ name: 'Push day (copy)', locationId: 'home' });
+    expect((await db.plans.get(await duplicatePlan(orig)))!.name).toBe('Push day (copy 2)');
+    await deletePlan(dup);
+    expect((await db.plans.get(dup))!.deleted).toBe(true);
+    expect((await db.plans.get(orig))!.deleted).toBeUndefined();
+  });
+
+  it('starting from a plan links the session and sets "last used"; add-to-plan adds once', async () => {
+    const id = await savePlan(draft);
+    const before = (await db.plans.get(id))!.updatedAt;
+    await new Promise((r) => setTimeout(r, 5));
+    const s = await startSession('home', id);
+    expect(s.planId).toBe(id);
+    expect(planLastUsed(await db.sessions.toArray()).get(id)).toBe(s.startedAt);
+    // Using or viewing a plan never touches its synced row (an edit on another device must win).
+    await markPlanViewed(id);
+    expect((await db.plans.get(id))!.updatedAt).toBe(before);
+    expect((await db.meta.get(`planViewed:${id}`))?.value).toBeGreaterThan(0);
+    expect(await addToPlan(id, 'jumping_jack')).toBe(true);
+    expect(await addToPlan(id, 'jumping_jack')).toBe(false);
+    expect((await db.plans.get(id))!.items.map((i) => i.exerciseId)).toEqual(['push_up', 'run_in_place', 'jumping_jack']);
+  });
+
+  it('refuses a plan with no name or no exercises', async () => {
+    await expect(savePlan({ ...draft, name: '' })).rejects.toThrow(/name/);
+    await expect(savePlan({ ...draft, items: [] })).rejects.toThrow(/at least one/);
+  });
+
+  it('plans are in backups and come back on restore; an old backup without plans keeps them', async () => {
+    const id = await savePlan(draft);
+    const json = await exportAll();
+    await deletePlan(id);
+    await importAll(json);
+    expect((await db.plans.get(id))!.deleted).toBeUndefined();
+    const old = JSON.parse(json);
+    delete old.plans;
+    await importAll(JSON.stringify(old));
+    expect((await db.plans.get(id))!.deleted).toBeUndefined(); // a backup from before plans keeps today's plans
+  });
+});
+
+describe('database upgrade v3 → v4 (plans)', () => {
+  it('keeps every row and resets the pull cursor so plans are pulled', async () => {
+    const name = 'upgrade-test';
+    await Dexie.delete(name);
+    const old = new Dexie(name);
+    old.version(3).stores({ profile: 'id', locations: 'id, updatedAt', sessions: 'id, startedAt, status, updatedAt', sets: 'id, sessionId, exerciseId, at, updatedAt', weights: 'id, date, updatedAt', meta: 'key', equipment: 'id, updatedAt', photos: 'id, at' });
+    await old.open();
+    await old.table('sets').put({ id: 'a', sessionId: 's', exerciseId: 'push_up', at: 1, reps: 10, isPR: false, updatedAt: 1 });
+    await old.table('meta').bulkPut([{ key: 'pullSeq', value: 42 }, { key: 'lastPush', value: 9 }]);
+    old.close();
+    const upgraded = new MaxFitDB(name);
+    await upgraded.open();
+    expect(await upgraded.sets.get('a')).toMatchObject({ reps: 10 });
+    expect(await upgraded.meta.get('pullSeq')).toBeUndefined();
+    expect((await upgraded.meta.get('lastPush'))?.value).toBe(9);
+    expect(await upgraded.plans.count()).toBe(0);
+    upgraded.close();
+  });
+});
+
+describe('auto rest', () => {
+  it('a Log while the rest clock runs starts a fresh rest; the earlier rest stays counted', async () => {
+    const s = await startSession('home');
+    await setMode(s.id, 'rest');
+    await db.sessions.update(s.id, { live: { ...(await db.sessions.get(s.id))!.live!, modeStartedAt: Date.now() - 80_000 } });
+    await restartRest(s.id);
+    const live = (await db.sessions.get(s.id))!.live!;
+    expect(live.mode).toBe('rest');
+    expect(inMode(live, Date.now())).toBeLessThan(2);
+    expect(live.banked.rest).toBeGreaterThanOrEqual(79);
+  });
+  it('from working, restartRest just switches to rest', async () => {
+    const s = await startSession('home');
+    await restartRest(s.id);
+    expect((await db.sessions.get(s.id))!.live!.mode).toBe('rest');
   });
 });

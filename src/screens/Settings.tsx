@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../data/db';
 import { Stepper } from '../components/ui';
 import { PlaceEditor } from '../components/PlaceEditor';
 import { CATEGORIES, EQUIPMENT, equipmentName, knownEquipment } from '../core/equipment';
@@ -38,6 +40,14 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
           Name (shown on Home)
           <input className="input" value={p.name} onChange={(e) => updateProfile({ name: e.target.value })} />
         </label>
+        <span className="tiny muted">Gender (sets your avatar's body)</span>
+        <div className="seg" role="radiogroup" aria-label="Gender">
+          {(['male', 'female'] as const).map((g) => (
+            <button key={g} role="radio" aria-checked={(p.gender ?? 'male') === g} className={`chip ${(p.gender ?? 'male') === g ? 'on' : ''}`} onClick={() => updateProfile({ gender: g })}>
+              {g === 'male' ? 'Male' : 'Female'}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="card stack" aria-label="Goals">
@@ -47,11 +57,11 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
       <section className="card stack" aria-label="Avatar style">
         <h2>Avatar style</h2>
-        <p className="small muted">Three looks. Same moves: it trains when you train.</p>
+        <p className="small muted">Three looks. It trains when you train.</p>
         <div className="seg" role="radiogroup" aria-label="Avatar style">
           {AVATAR_STYLES.map((st) => (
             <button key={st.id} role="radio" aria-checked={(p.avatarStyle ?? 'athlete') === st.id} className={`card flat stack style-pick ${(p.avatarStyle ?? 'athlete') === st.id ? 'on' : ''}`} onClick={() => updateProfile({ avatarStyle: st.id })}>
-              <Avatar stage={d.stage} gear={d.gear} color={color} size={86} style={st.id} action="demo" />
+              <Avatar stage={d.stage} gear={d.gear} color={color} size={86} style={st.id} gender={p.gender} action="demo" />
               <b className="small">{st.name}</b>
               <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 {st.blurb}
@@ -245,7 +255,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
 
       <section className="card stack" aria-label="Delete test data">
         <h2>Delete my test data</h2>
-        <p className="small muted">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter moves). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
+        <p className="small muted">Deletes all sessions, sets and weigh-ins, and starts the game again (level 1, starter exercises). Keeps your places, equipment, goals, settings and photos. Synced devices delete them too.</p>
         <button
           className="btn danger"
           onClick={async () => {
@@ -298,6 +308,8 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
   const [user, setUser] = useState<string | null>(null);
   const [last, setLast] = useState<SyncResult | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set by sync when the cloud does not accept plans yet (migration not applied).
+  const plansBlocked = useLiveQuery(() => db.meta.get('syncBlocked:plans'), [])?.value === true;
 
   useEffect(() => {
     void currentUser().then((u) => setUser(u?.email ?? null));
@@ -333,6 +345,7 @@ function SyncCard({ toast }: { toast: (t: string) => void }) {
         <>
           <p className="small">Signed in as {user}</p>
           <p className="small muted">{last ? `Last sync ${new Date(last.at).toLocaleString()} · sent ${last.pushed}, got ${last.pulled}` : 'Not synced yet.'}</p>
+          {plansBlocked && <p className="small banner">Exercise plans are on this phone only until the cloud is updated (everything else syncs). Export a backup to keep them safe.</p>}
           <div className="row">
             <button className="btn primary grow" disabled={busy} onClick={() => run(syncNow, 'Synced')}>
               Sync now

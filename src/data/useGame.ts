@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { availableExercises, deriveGame, fitsEquipment, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals, ownedEquipment, visibleUnlocks } from '../core/rules';
 import type { Exercise } from '../core/types';
 import { db } from './db';
+import { planLastUsed } from '../core/plans';
 
 /** Everything the screens need, live from the local database. */
 export function useGame() {
@@ -12,6 +13,11 @@ export function useGame() {
   const locations = (useLiveQuery(() => db.locations.toArray(), []) ?? []).filter((l) => !l.deleted);
   const weights = (useLiveQuery(() => db.weights.orderBy('date').toArray(), []) ?? []).filter((w) => !w.deleted);
   const customEquipment = useLiveQuery(() => db.equipment.toArray(), []) ?? [];
+  const plans = (useLiveQuery(() => db.plans.toArray(), []) ?? []).filter((x) => !x.deleted);
+  // Last viewed: this device only (meta). Last used: from the sessions started from the plan.
+  const viewedRows = useLiveQuery(() => db.meta.where('key').startsWith('planViewed:').toArray(), []) ?? [];
+  const planViewed = useMemo(() => new Map(viewedRows.map((r) => [r.key.slice('planViewed:'.length), Number(r.value)])), [viewedRows]);
+  const planUsed = useMemo(() => planLastUsed(sessions), [sessions]);
 
   const derived = useMemo(() => {
     if (!profile) return null;
@@ -49,7 +55,7 @@ export function useGame() {
     };
   }, [profile, sessions, sets, locations]);
 
-  return { profile, sessions, sets, locations, weights, customEquipment, d: derived };
+  return { profile, sessions, sets, locations, weights, customEquipment, plans, planUsed, planViewed, d: derived };
 }
 
 export type Game = ReturnType<typeof useGame>;
