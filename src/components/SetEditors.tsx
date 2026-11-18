@@ -73,6 +73,7 @@ function parseDur(text: string): number | null {
   const t = text.trim().replace(',', '.');
   const m = /^(?:(\d+):)?(\d+(?:\.\d+)?)$/.exec(t);
   if (!m) return null;
+  if (m[1] && Number(m[2]) >= 60) return null; // "1:75" is not a time
   return (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2]);
 }
 
@@ -81,9 +82,11 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
   const [text, setText] = useState(fmtDur(value));
   const [running, setRunning] = useState<number | null>(null);
   const [now, setNow] = useState(0);
+  // Re-format only when the value changed from outside (+/-, stopwatch), not while typing.
   useEffect(() => {
-    if (running === null) setText(fmtDur(value));
-  }, [value, running]);
+    const typed = parseDur(text);
+    if (running === null && typed !== value && !(typed === null && value === 0)) setText(fmtDur(value));
+  }, [value, running]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (running === null) return;
     const t = setInterval(() => setNow(Date.now()), 100);
@@ -107,7 +110,8 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
           onChange={(e) => {
             setText(e.target.value);
             const n = parseDur(e.target.value);
-            if (n !== null) onChange(Math.round(n * 10) / 10);
+            // Empty or unreadable = 0, so an empty box can never log the old target by mistake.
+            onChange(n === null ? 0 : Math.round(n * 10) / 10);
           }}
         />
         <button type="button" aria-label={`More ${label}`} disabled={running !== null} onClick={() => onChange(Math.round((value + step) * 10) / 10)}>

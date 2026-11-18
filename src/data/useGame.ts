@@ -1,7 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
-import { availableExercises, deriveGame, fitsEquipment, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals, ownedEquipment } from '../core/rules';
-import { EXERCISE_BY_ID } from '../core/exercises';
+import { availableExercises, deriveGame, fitsEquipment, gearFor, habitTarget, levelProgress, avatarStage, dailyTotals, ownedEquipment, visibleUnlocks } from '../core/rules';
 import type { Exercise } from '../core/types';
 import { db } from './db';
 
@@ -23,7 +22,7 @@ export function useGame() {
     // Others stay hidden until that equipment is added to a place.
     const owned = ownedEquipment(locations);
     const canDo = (e: Exercise) => fitsEquipment(e, owned);
-    const unlocked = unlockedAll.filter((id) => canDo(EXERCISE_BY_ID[id]));
+    const unlocked = visibleUnlocks(unlockedAll, canDo, profile.revealed);
     const lp = levelProgress(xp);
     const active = sessions.find((s) => s.status === 'active' && !s.deleted) ?? null;
     const location = locations.find((l) => l.id === (active?.locationId ?? profile.lastLocationId)) ?? locations[0] ?? null;

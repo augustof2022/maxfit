@@ -43,7 +43,7 @@ function LocationPicker({ game, value, onPick }: { game: Game; value: string | n
         <PlaceEditor
           loc={{ name: '', kind: 'gym', equipment: [] }}
           customEquipment={game.customEquipment}
-          unlocked={game.d!.unlocked}
+          unlocked={game.d!.unlockedAll}
           canDelete={false}
           onClose={(id) => {
             setAdding(false);
@@ -257,6 +257,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
               ex={e}
               ms={d.measuresOf(e)}
               goals={p.goals ?? []}
+              known={(id) => d.unlocked.includes(id)}
               rec={d.stats.records.get(e.id)}
               sets={sessionSets.filter((s) => s.exerciseId === e.id)}
               open={open === e.id}
@@ -310,10 +311,11 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
   );
 }
 
-function ExerciseCard({ ex, ms, goals, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; goals: Goal[]; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
+function ExerciseCard({ ex, ms, goals, known, rec, sets, open, inPlan, onToggle, session, onLogged }: { ex: Exercise; ms: Measure[]; goals: Goal[]; known: (id: string) => boolean; rec: ExRecord | undefined; sets: WorkSet[]; open: boolean; inPlan: boolean; onToggle: () => void; session: Session; onLogged: (m: string) => void }) {
   const target = nextTarget(ex, rec, ms, goals);
   const goal = goalFor(ex, goals);
-  const gt = goal && (ms.includes('reps') || ms.includes('weight')) ? GOAL_TARGETS[goal] : null;
+  // The goal rep range drives targets only for weighted moves, so show it only there.
+  const gt = goal && ms.includes('weight') ? GOAL_TARGETS[goal] : null;
   const [demo, setDemo] = useState(false);
   const fromTarget = (): Partial<WorkSet> => ({ reps: target.reps, seconds: target.seconds, weightKg: target.weightKg, distanceKm: target.distanceKm });
   const [v, setV] = useState<Partial<WorkSet>>(fromTarget);
@@ -413,7 +415,7 @@ function ExerciseCard({ ex, ms, goals, rec, sets, open, inPlan, onToggle, sessio
         </>
       )}
       {measuring && <MeasureSheet ex={ex} current={ms} onClose={() => setMeasuring(false)} />}
-      {demo && <ExerciseDemo ex={ex} onClose={() => setDemo(false)} />}
+      {demo && <ExerciseDemo ex={ex} known={known} onClose={() => setDemo(false)} />}
       {editing && <EditSetSheet ex={ex} ms={ms} set={editing} onClose={() => setEditing(null)} />}
     </div>
   );

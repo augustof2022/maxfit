@@ -105,13 +105,13 @@ export function Progress({ game }: { game: Game }) {
                 const ms = d.measuresOf(e);
                 const rec = d.stats.records.get(e.id);
                 return (
-                  <div key={e.id} className="card ex">
+                  <div key={e.id} className={`card ex ${d.canDo(e) ? '' : 'locked'}`}>
                     <span className="ico">{iconFor(ms)}</span>
                     <div className="grow stack" style={{ gap: 4 }}>
                       <b>{e.name}</b>
-                      {e.base && EXERCISE_BY_ID[e.base] && <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>Variation of {EXERCISE_BY_ID[e.base].name} · optional</span>}
+                      {e.base && EXERCISE_BY_ID[e.base] && unlocked.has(e.base) && <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>Variation of {EXERCISE_BY_ID[e.base].name} · optional</span>}
                       <span className="small muted">{rec?.bestSet ? `Record ${fmtRecord(ms, rec)} · ${rec.count} sets` : 'Unlocked. Try it next session!'}</span>
-                      {e.equipment.length > 0 && <span className="tiny muted">Needs: {e.equipment.map((id) => equipmentName(id, game.customEquipment)).join(', ')}</span>}
+                      {e.equipment.length > 0 && <span className="tiny muted">{d.canDo(e) ? 'Needs' : 'Needs equipment none of your places has'}: {e.equipment.map((id) => equipmentName(id, game.customEquipment)).join(', ')}</span>}
                     </div>
                     <div className="stack" style={{ gap: 6 }}>
                       <IconBtn label={`How to do ${e.name}`} onClick={() => setDemo(e)}>
@@ -183,7 +183,7 @@ export function Progress({ game }: { game: Game }) {
         })}
       </section>
 
-      {demo && <ExerciseDemo ex={demo} onClose={() => setDemo(null)} />}
+      {demo && <ExerciseDemo ex={demo} known={(id) => unlocked.has(id)} onClose={() => setDemo(null)} />}
       {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} onClose={() => setMeasuring(null)} />}
       {editSet && EXERCISE_BY_ID[editSet.exerciseId] && <EditSetSheet ex={EXERCISE_BY_ID[editSet.exerciseId]} ms={d.measuresOf(EXERCISE_BY_ID[editSet.exerciseId])} set={editSet} onClose={() => setEditSet(null)} />}
       {editSession && <EditSessionSheet game={game} s={editSession} onClose={() => setEditSession(null)} />}

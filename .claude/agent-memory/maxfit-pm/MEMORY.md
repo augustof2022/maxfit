@@ -18,3 +18,4 @@ Keep under 200 lines. Remove lines that are no longer true.
 - 2026-11-18: When a stored list becomes derived (unlocks), check the sync merge too: a union merge silently undoes resets.
 - 2026-11-18: Renz is phone-first: answer "where does X go" with the exact GitHub/Supabase menu path and exact names; say when no file is needed.
 - 2026-11-18: Generating code from the scientist's markdown tables: insert extra fields at the END of each object line (a lazy regex matched the unlock object's "}," first).
+- 2026-11-18: A new 'lower is better' measure must be checked in every >= comparison (records, challenges, unlock rules). Code review caught the challenge one.

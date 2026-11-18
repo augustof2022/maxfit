@@ -224,7 +224,8 @@ export function nextTarget(ex: Exercise, rec: ExRecord | undefined, ms: Measure[
     // Faster wins: a small cut. Short sprints in tenths; long time trials in whole seconds.
     const cur = measureValue(b, 'speed');
     const step = cur < 60 ? 0.2 : cur < 600 ? 2 : 10;
-    t.seconds = Math.max(0.1, Math.round((cur - step) * 10) / 10);
+    // A tiny record (likely a typo) cannot be beaten by a fixed step: use 5% of it instead.
+    t.seconds = cur - step > 0 ? Math.round((cur - step) * 10) / 10 : Math.max(0.01, Math.round(cur * 0.95 * 100) / 100);
     how = `${step} s faster${has('distance') ? ', same distance or more' : ''}`;
   } else if (has('distance')) {
     t.distanceKm = round1((b.distanceKm ?? 0) + 0.1);
@@ -381,7 +382,10 @@ export function ruleProgress(rule: UnlockRule, st: GameStats): { current: number
     case 'record': {
       const ex = EXERCISE_BY_ID[rule.exerciseId];
       const m = rule.measure ?? (ex ? mainMeasure(ex) : 'reps');
-      return { current: st.records.get(rule.exerciseId)?.bests[m] ?? 0, needed: rule.value };
+      const best = st.records.get(rule.exerciseId)?.bests[m];
+      // Faster time: met when the best time is at or under the value (progress = value / best).
+      if (lowerWins(m)) return best ? { current: Math.min(rule.value, (rule.value * rule.value) / best), needed: rule.value } : { current: 0, needed: rule.value };
+      return { current: best ?? 0, needed: rule.value };
     }
     case 'all': {
       // progress = the weakest part
@@ -472,6 +476,14 @@ export function nextUnlockHints(unlocked: string[], st: GameStats, limit = 3, ca
     })
     .sort((a, b) => b.ratio - a.ratio || a.exercise.tier - b.exercise.tier)
     .slice(0, limit);
+}
+
+/**
+ * What the user sees as unlocked: earned AND (doable with their equipment OR already shown to them).
+ * `revealed` undefined = an app version before the reveal list: then everything doable counts as shown.
+ */
+export function visibleUnlocks(unlockedAll: string[], canDo: (e: Exercise) => boolean, revealed?: string[]): string[] {
+  return unlockedAll.filter((id) => canDo(EXERCISE_BY_ID[id]) || (revealed ?? []).includes(id));
 }
 
 /** Every equipment id found in the user's places: what they own, somewhere. */
@@ -649,6 +661,8 @@ export function openChest(
     const e = challengeable[Math.floor(rnd() * challengeable.length)];
     const best = ctx.records.get(e.id)!.best;
     const m = mainMeasure(e);
+    // Faster time: the challenge is a LOWER time (about 3% faster), never a slower one.
+    if (lowerWins(m)) return { kind: 'challenge', challenge: { exerciseId: e.id, target: Math.max(0.1, round1(best * 0.97)), xp: 100 } };
     const bump = m === 'time' ? 10 : m === 'distance' ? 0.3 : 2;
     return { kind: 'challenge', challenge: { exerciseId: e.id, target: round1(best + bump), xp: 100 } };
   }
@@ -663,5 +677,10 @@ export function openChest(
 export function challengeMet(ch: Challenge, sets: WorkSet[]): boolean {
   const ex = EXERCISE_BY_ID[ch.exerciseId];
   if (!ex) return false;
-  return sets.some((s) => s.exerciseId === ch.exerciseId && !s.deleted && measureValue(s, mainMeasure(ex)) >= ch.target);
+  const m = mainMeasure(ex);
+  return sets.some((s) => {
+    if (s.exerciseId !== ch.exerciseId || s.deleted) return false;
+    const v = measureValue(s, m);
+    return lowerWins(m) ? v > 0 && v <= ch.target : v >= ch.target;
+  });
 }

@@ -187,6 +187,20 @@ describe('edit and delete (Renz, 2026-11-18)', () => {
     expect(live[0]).toMatchObject({ date: '2026-11-02', kg: 69.5 });
   });
 
+  it('a move earned without its equipment is revealed once the equipment is added', async () => {
+    await db.locations.bulkPut((await db.locations.toArray()).map((l) => ({ ...l, equipment: ['mat'] }))); // no dumbbells anywhere
+    for (let i = 0; i < 6; i++) {
+      const s = await startSession('home');
+      await logSet(s.id, 'push_up', { reps: 5 });
+      const sum = await finishSession(s.id);
+      expect(sum.unlocked).not.toContain('db_row'); // db_row unlocks at 6 sessions but needs a dumbbell
+    }
+    await db.locations.update('home', { equipment: ['mat', 'dumbbell'] });
+    const s = await startSession('home');
+    await logSet(s.id, 'push_up', { reps: 5 });
+    expect((await finishSession(s.id)).unlocked).toContain('db_row');
+  });
+
   it('reset deletes training data but keeps places', async () => {
     await twoSessions();
     await resetTrainingData();

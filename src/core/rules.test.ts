@@ -23,6 +23,7 @@ import {
   COLORS,
   goalFor,
   suggestedRestSec,
+  visibleUnlocks,
   xpForLevel,
 } from './rules';
 import { beats, measuresFor } from './measures';
@@ -203,6 +204,19 @@ describe('faster time (sprints) and variations (round 2)', () => {
       if (e.requires) expect(EXERCISE_BY_ID[e.requires], e.id).toBeDefined();
       if (e.unlock.type === 'secret') expect(e.requires, e.id).toBeDefined();
     }
+  });
+  it('a speed challenge asks for a FASTER time, and only a faster time meets it', () => {
+    const records = computeRecords([set('sprint_100m', { seconds: 14.6 })]);
+    const ctx = { unlocked: ['sprint_100m'], cosmetics: COLORS.map((c) => c.id), hadPR: true, records, available: [EXERCISE_BY_ID.sprint_100m] };
+    const ch = Array.from({ length: 200 }, (_, i) => openChest(`c${i}`, ctx)).find((r) => r.kind === 'challenge') as any;
+    expect(ch.challenge.target).toBeLessThan(14.6);
+    expect(challengeMet(ch.challenge, [set('sprint_100m', { seconds: 14.0 })])).toBe(true);
+    expect(challengeMet(ch.challenge, [set('sprint_100m', { seconds: 20 })])).toBe(false);
+  });
+  it('moves already shown stay visible without their equipment; never-shown ones stay hidden', () => {
+    const noGear = (e: any) => e.equipment.length === 0;
+    expect(visibleUnlocks(['push_up', 'db_curl'], noGear, ['push_up', 'db_curl'])).toEqual(['push_up', 'db_curl']);
+    expect(visibleUnlocks(['push_up', 'db_curl'], noGear, ['push_up'])).toEqual(['push_up']);
   });
   it('a chest never gives a secret before its base move, or one the user lacks equipment for', () => {
     const base = { cosmetics: COLORS.map((c) => c.id), hadPR: false, records: new Map(), available: [], owned: [] as string[] };

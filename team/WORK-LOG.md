@@ -38,3 +38,9 @@
 - Built: faster-time measure + stopwatch input with tenths; equipment-aware reveals/hints/chests; secret prerequisites;
   goal rep/rest targets (Apply in Settings); interval reps on cardio stop; "How to do it" demo sheet.
 - Checks: typecheck clean; 74 unit tests; e2e 30/30; balance steady/casual/home (GAME-DESIGN.md).
+- Round-2 review (code-reviewer, high): changes requested → fixed: speed challenges now ask for a faster time; base names of
+  locked moves never shown; "revealed" list (shown moves stay with a "needs equipment" note; equipment-gated moves are revealed
+  at the next session end after the equipment is added); place editor counts all earned moves; empty time box cannot log
+  the old target; m:ss parse rejects 1:75 and does not reformat while typing; goal rep line only for weighted moves.
+  Not fixed (nit): a running stopwatch is lost if the card closes.
+- CI: first signed release build OK (build 11, keystore from secrets). Checks: 77 unit tests, e2e 30/30, balance unchanged.

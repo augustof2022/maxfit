@@ -105,6 +105,12 @@ export interface Profile {
   /** The user's own choice of measures per exercise id. */
   exerciseMeasures?: Record<string, Measure[]>;
   avatarStyle?: AvatarStyle;
+  /**
+   * Moves already shown to the user. They stay in the inventory even if the equipment for them is
+   * removed later (shown as "needs equipment"); moves earned but never doable stay hidden until the
+   * equipment is added, then are revealed as a surprise at the next session end (code review, 2026-11-18).
+   */
+  revealed?: string[];
   /** When "Delete test data" last ran; sync uses it so old copies do not bring progress back. */
   resetAt?: number;
   updatedAt: number;

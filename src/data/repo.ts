@@ -53,6 +53,7 @@ export function defaultProfile(now = 0): Profile {
     goals: [],
     focus: [],
     exerciseMeasures: {},
+    revealed: [...STARTER_IDS],
     avatarStyle: 'athlete',
     updatedAt: now,
   };
@@ -437,10 +438,15 @@ export async function finishSession(id: string): Promise<SessionSummary> {
     const sessionsFinal = allSessions.map((x) => (x.id === id ? finished : x));
     const unlockedAfter = unlockedFrom(buildStats(sessionsFinal, sets, xpBefore + xp, now, measuresOf), sessionsFinal, profile.unlocked);
     // Reveal only what the user can do with their equipment; the rest waits until they have it.
-    const newly = unlockedAfter.filter((x) => !unlockedBefore.includes(x) && fitsEquipment(EXERCISE_BY_ID[x], owned));
+    // `revealed` remembers what was shown, so a move earned earlier is revealed once its equipment is added.
+    const canDo = (x: string) => fitsEquipment(EXERCISE_BY_ID[x], owned);
+    const shownBefore = profile.revealed ?? unlockedBefore.filter(canDo);
+    const visibleAfter = unlockedAfter.filter(canDo);
+    const newly = visibleAfter.filter((x) => !shownBefore.includes(x));
+    const revealed = [...new Set([...shownBefore, ...visibleAfter])];
 
     await db.sessions.put(finished);
-    await db.profile.update('me', { cosmetics, challenge, updatedAt: now });
+    await db.profile.update('me', { cosmetics, challenge, revealed, updatedAt: now });
 
     return {
       session: finished,
@@ -546,7 +552,7 @@ export async function resetTrainingData(): Promise<void> {
       const rows = ((await (table as any).toArray()) as { id: string; deleted?: boolean }[]).filter((r) => !r.deleted);
       await (table as any).bulkPut(rows.map((r) => ({ ...r, deleted: true, ...(table === db.sessions ? { status: 'done', live: null } : {}), updatedAt: now })));
     }
-    await db.profile.update('me', { unlocked: [...STARTER_IDS], cosmetics: ['ember'], color: 'ember', challenge: null, resetAt: now, updatedAt: now });
+    await db.profile.update('me', { unlocked: [...STARTER_IDS], cosmetics: ['ember'], color: 'ember', challenge: null, revealed: [...STARTER_IDS], resetAt: now, updatedAt: now });
   });
 }
 

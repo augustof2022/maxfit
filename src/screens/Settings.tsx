@@ -278,7 +278,7 @@ export function SettingsScreen({ game, toast }: { game: Game; toast: (t: string)
         MaxFit {version} · Train like a game
       </p>
 
-      {editing && <PlaceEditor loc={editing} customEquipment={game.customEquipment} unlocked={d.unlocked} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
+      {editing && <PlaceEditor loc={editing} customEquipment={game.customEquipment} unlocked={d.unlockedAll} onClose={() => setEditing(null)} canDelete={game.locations.length > 1} />}
     </div>
   );
 }

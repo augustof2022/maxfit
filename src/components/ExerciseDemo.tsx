@@ -12,10 +12,11 @@ import { db } from '../data/db';
 import { Avatar, actionFor } from './Avatar';
 import { Sheet } from './ui';
 
-export function ExerciseDemo({ ex, onClose }: { ex: Exercise; onClose: () => void }) {
+export function ExerciseDemo({ ex, onClose, known }: { ex: Exercise; onClose: () => void; known: (id: string) => boolean }) {
   const p = useLiveQuery(() => db.profile.get('me'), []);
   const color = COLORS.find((c) => c.id === p?.color)?.hex ?? '#ff7a1a';
-  const base = ex.base ? EXERCISE_BY_ID[ex.base] : null;
+  // Never name a base move that is still a surprise.
+  const base = ex.base && known(ex.base) ? EXERCISE_BY_ID[ex.base] : null;
   const yt = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.name} exercise proper form`)}`;
   return (
     <Sheet onClose={onClose}>
