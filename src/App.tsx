@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ensureSeed, type SessionSummary } from './data/repo';
+import { ensureSeed, migrateRecords, type SessionSummary } from './data/repo';
 import { useGame } from './data/useGame';
 import { Toast } from './components/ui';
 import { ConfirmHost } from './components/Confirm';
@@ -31,7 +31,7 @@ export default function App() {
   const clearToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
-    void ensureSeed();
+    void ensureSeed().then(() => migrateRecords());
   }, []);
 
   useEffect(() => {

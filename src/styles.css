@@ -79,7 +79,7 @@ p { margin: 0; }
 .btn.danger.solid { background: var(--bad); color: #fff; border: 0; }
 .update-bar { position: sticky; top: calc(env(safe-area-inset-top) + 6px); z-index: 30; display: flex; align-items: center; gap: 10px; background: #12331f; border: 1px solid var(--good); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; animation: rise .3s var(--ease-out); }
 .surprise { border-style: dashed; text-align: center; }
-.seg { display: grid; grid-auto-flow: column; gap: 6px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
 .input { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px; width: 100%; font-size: 16px; }
 label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; height: calc(var(--tabbar) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); background: rgba(15,17,21,.95); backdrop-filter: blur(10px); border-top: 1px solid var(--line); display: flex; z-index: 20; }

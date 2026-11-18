@@ -21,3 +21,5 @@
 | 2026-11-18 | "Faster time" as its own measure (lower wins) | A per-exercise flag | maxfit-pm | Works with the measure picker and rule A with no extra settings |
 | 2026-11-18 | Surprises only for equipment in Renz's places | Reveal all | Renz | "Don't surprise-add an exercise I can't do" |
 | 2026-11-18 | Demos = public-domain photos + avatar + YouTube search | Avatar only; hand-picked video links | maxfit-pm | Clear, offline, no broken or made-up links |
+| 2026-11-18 | "How to beat it" per exercise: any (rule A) or same weight/distance (records per level; heavier = record) | Rule A only; one combined score | Renz | A heavier weight lowers reps; that must count as progress |
+| 2026-11-18 | One Sprint exercise; the user picks the distance; best time per distance | Fixed 100 m | Renz (Q25) | Any distance, own records |

@@ -194,11 +194,15 @@ try {
 
   // Measures: push-up measured by reps + time.
   await page.getByRole('button', { name: 'How Push-up is measured' }).click();
+  await page.getByRole('radio', { name: 'Same ___, beat ___' }).click();
+  await shot('15a-how-to-beat');
+  check('"How to beat it" offers same weight / same distance', (await page.getByRole('radio', { name: 'Same weight' }).count()) === 1 && (await page.getByRole('radio', { name: 'Faster time' }).count()) === 1);
+  await page.getByRole('radio', { name: 'Beat any number' }).click();
   await page.getByRole('button', { name: /^Time/ }).click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('button', { name: 'Change', exact: true }).click();
   await page.waitForTimeout(300);
-  check('Push-up can be measured by reps + time', (await page.getByRole('button', { name: 'How Push-up is measured' }).textContent()).includes('Reps+Time'));
+  check('Push-up can be measured by reps + time', (await page.getByRole('button', { name: 'How Push-up is measured' }).textContent()).includes('Reps + Time'));
 
   // Edit a set from History, with "are you sure?"
   await page.getByRole('button', { name: 'Edit Push-up set' }).first().click();

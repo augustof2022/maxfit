@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Bar, IconBtn, Sheet, Stepper } from '../components/ui';
 import { confirmAsk } from '../components/Confirm';
-import { EditSetSheet, MeasureSheet } from '../components/SetEditors';
+import { EditSetSheet, MeasureSheet, trackLabel } from '../components/SetEditors';
 import { ExerciseDemo } from '../components/ExerciseDemo';
 import { EXERCISES, EXERCISE_BY_ID, TIER_NAMES } from '../core/exercises';
 import { equipmentName } from '../core/equipment';
 import { fmtClock } from '../core/live';
-import { fmtValues, iconFor, MEASURES } from '../core/measures';
+import { fmtValues, iconFor } from '../core/measures';
 import { AVATAR_STAGES, COLORS, dayKey, doneSessions, GEAR, nextUnlockHints } from '../core/rules';
 import type { Exercise, Session, WorkSet } from '../core/types';
 import { deleteSession, updateProfile, updateSession } from '../data/repo';
@@ -118,7 +118,7 @@ export function Progress({ game }: { game: Game }) {
                         ▶ How to
                       </IconBtn>
                       <IconBtn label={`How ${e.name} is measured`} onClick={() => setMeasuring(e)}>
-                        📏 {ms.map((m) => MEASURES.find((x) => x.id === m)!.label).join('+')}
+                        📏 {trackLabel(ms, d.beatOf(e))}
                       </IconBtn>
                     </div>
                   </div>
@@ -184,8 +184,8 @@ export function Progress({ game }: { game: Game }) {
       </section>
 
       {demo && <ExerciseDemo ex={demo} known={(id) => unlocked.has(id)} onClose={() => setDemo(null)} />}
-      {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} onClose={() => setMeasuring(null)} />}
-      {editSet && EXERCISE_BY_ID[editSet.exerciseId] && <EditSetSheet ex={EXERCISE_BY_ID[editSet.exerciseId]} ms={d.measuresOf(EXERCISE_BY_ID[editSet.exerciseId])} set={editSet} onClose={() => setEditSet(null)} />}
+      {measuring && <MeasureSheet ex={measuring} current={d.measuresOf(measuring)} beat={d.beatOf(measuring)} onClose={() => setMeasuring(null)} />}
+      {editSet && EXERCISE_BY_ID[editSet.exerciseId] && <EditSetSheet ex={EXERCISE_BY_ID[editSet.exerciseId]} ms={d.measuresOf(EXERCISE_BY_ID[editSet.exerciseId])} beat={d.beatOf(EXERCISE_BY_ID[editSet.exerciseId])} set={editSet} onClose={() => setEditSet(null)} />}
       {editSession && <EditSessionSheet game={game} s={editSession} onClose={() => setEditSession(null)} />}
     </div>
   );

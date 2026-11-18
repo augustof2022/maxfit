@@ -191,3 +191,18 @@ unlocked it in 90 days. Still locked after 90 days are tier 5–6 moves (deadlif
 | home (no equipment) | 56 | 3 |
 High knees stays locked at 90 days in the simulation because the simulated user rarely trains run in place;
 a real user who runs in place often reaches 90 s in about 14 practice sessions [Design choice; watch it].
+
+## Round 3: "How to beat it" per exercise (Renz approved, 2026-11-18)
+- Two modes, set per exercise in 📏 (default shown there):
+  - **Beat any number** (rule A): one tracked number better, none worse. Default for runs, cardio and holds.
+  - **Same ___, beat ___**: keep weight or distance fixed, beat reps / longer time / faster time. Records are kept
+    **per weight or per distance**. Default for every weight + reps move (same weight, more reps) and for Sprint
+    (same distance, faster time; Renz picks the distance, in meters).
+- **Heavier weight than ever = a record** ("NEW WEIGHT!"), and it starts that weight's count. If the reps at the
+  heavier weight also beat the old reps, it is just as much a record. A first set at a **lighter** weight (or a new
+  distance) only starts that level's record — dropping the weight cannot farm records [Design choice].
+- The record and "Beat this" follow the weight or distance typed in the card right now.
+- When the best reps at a weight reach the top of the goal's rep range, the target is to move up 2.5 kg at the
+  bottom of the range (double progression, [Design choice] per docs/research/EXERCISE-LADDER.md).
+- Challenges from chests skip "same" moves (one plain number does not fit them).
+- Balance unchanged (records do not drive unlock pacing): steady 57, casual 35, home 56 of 73 in 90 days.
