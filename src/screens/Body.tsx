@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import '../styles-extra.css';
 import { IconBtn, LineChart, reducedMotion, Sheet, Stepper } from '../components/ui';
 import { confirmAsk } from '../components/Confirm';
 import { PhotoJournal } from '../components/PhotoJournal';
+import { Ico, Pencil } from '../components/Icon';
 import { bmi, bmiCategory, dayKey } from '../core/rules';
 import type { WeightEntry } from '../core/types';
 import { addWeight, deleteWeight, updateProfile, updateWeight } from '../data/repo';
 import type { Game } from '../data/useGame';
 
-const CAT_COLOR: Record<string, string> = { Underweight: 'var(--rest)', Normal: 'var(--good)', Overweight: 'var(--accent2)', Obese: 'var(--bad)' };
+const CAT_COLOR: Record<string, string> = { Underweight: 'var(--rest)', Normal: 'var(--good)', Overweight: 'var(--gold)', Obese: 'var(--bad)' };
 
 export function Body({ game }: { game: Game }) {
   const p = game.profile!;
@@ -28,84 +28,112 @@ export function Body({ game }: { game: Game }) {
     await addWeight(date, v);
   };
 
+  const cat = b ? bmiCategory(b) : null;
+  const change = first && last && first.id !== last.id ? Math.round((last.kg - first.kg) * 10) / 10 : null;
+
   return (
     <div className="stack screen">
-      <h1>Body</h1>
+      <header className="screen-head">
+        <h1>Body</h1>
+      </header>
 
       <section className="card stack" aria-label="BMI">
-        <div className="row between">
+        <div className="body-stats">
           <div className="stat">
-            <span className="tiny muted">Weight</span>
-            <b className="num">{last ? `${last.kg} kg` : '-'}</b>
+            <span>Weight</span>
+            <b className="num">{last ? last.kg : '-'}{last && <small>kg</small>}</b>
           </div>
-          <div className="stat" style={{ textAlign: 'right' }}>
-            <span className="tiny muted">BMI</span>
-            <b className="num" style={{ color: b ? CAT_COLOR[bmiCategory(b)] : undefined }}>
-              {b ?? '-'} {b && <span className="small">{bmiCategory(b)}</span>}
+          <div className="stat">
+            <span>BMI</span>
+            <b className="num" style={{ color: cat ? CAT_COLOR[cat] : undefined }}>
+              {b ?? '-'}
             </b>
+            {cat && (
+              <span className="cat" style={{ color: CAT_COLOR[cat] }}>
+                {cat}
+              </span>
+            )}
           </div>
         </div>
         {b && <BmiScale value={b} />}
-        {first && last && first.id !== last.id && (
-          <p className="small muted">
-            Since {first.date}: {last.kg - first.kg > 0 ? '+' : ''}
-            {Math.round((last.kg - first.kg) * 10) / 10} kg
+        {change !== null && (
+          <p className="note num">
+            Since {first!.date}: {change > 0 ? '+' : ''}
+            {change} kg
           </p>
         )}
-        {!p.heightCm && <p className="small" style={{ color: 'var(--accent2)' }}>Set your height below to see your BMI.</p>}
-        <p className="tiny muted">BMI = kg ÷ (height in m)². WHO adult ranges. A rough guide: it does not tell muscle from fat.</p>
+        {!p.heightCm && <p className="note" style={{ color: 'var(--gold)' }}>Set your height below to see your BMI.</p>}
+        <p className="note faint">BMI = kg ÷ (height in m)². WHO adult ranges. A rough guide: it does not tell muscle from fat.</p>
       </section>
 
-      <section className="card stack" aria-label="Log weight">
-        <h2>Log weight</h2>
-        <div className="row wrap">
+      <section className="group" aria-label="Log weight">
+        <div className="group-head">
+          <h2>Log weight</h2>
+        </div>
+        <div className="card stack">
           <Stepper label="Weight" unit="kg" value={kg} step={0.1} onChange={setKg} />
           <label className="field">
             Date
             <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
           </label>
+          <button className="btn primary" disabled={kg <= 0} onClick={save}>
+            Save weight
+          </button>
         </div>
-        <button className="btn primary big" disabled={kg <= 0} onClick={save}>
-          Save weight
-        </button>
       </section>
 
-      <section className="card stack" aria-label="Trend">
-        <h2>Trend</h2>
-        <LineChart points={ws.slice(-30).map((w) => ({ label: w.date.slice(5), v: w.kg }))} unit="kg" />
+      <section className="group" aria-label="Trend">
+        <div className="group-head">
+          <h2>Trend</h2>
+          {ws.length > 1 && <span className="small muted">Last {Math.min(30, ws.length)} weigh-ins</span>}
+        </div>
+        <div className="card">
+          <LineChart points={ws.slice(-30).map((w) => ({ label: w.date.slice(5), v: w.kg }))} unit="kg" />
+        </div>
       </section>
 
-      <section className="card stack" aria-label="Height">
-        <h2>Height</h2>
-        <div className="row">
+      <section className="group" aria-label="Height">
+        <div className="group-head">
+          <h2>Height</h2>
+          {p.heightCm ? <span className="small muted num">Saved: {p.heightCm} cm</span> : null}
+        </div>
+        <div className="card stack">
           <Stepper label="Height" unit="cm" value={height} step={1} onChange={setHeight} />
+          <button
+            className="btn secondary"
+            disabled={height < 100 || height > 250 || height === p.heightCm}
+            onClick={async () => {
+              if (p.heightCm && !(await confirmAsk({ title: 'Change your height?', body: `${p.heightCm} cm → ${height} cm. All BMI numbers use the new height.`, ok: 'Change' }))) return;
+              await updateProfile({ heightCm: height });
+            }}
+          >
+            Save height
+          </button>
         </div>
-        <button
-          className="btn ghost"
-          disabled={height < 100 || height > 250 || height === p.heightCm}
-          onClick={async () => {
-            if (p.heightCm && !(await confirmAsk({ title: 'Change your height?', body: `${p.heightCm} cm → ${height} cm. All BMI numbers use the new height.`, ok: 'Change' }))) return;
-            await updateProfile({ heightCm: height });
-          }}
-        >
-          Save height
-        </button>
       </section>
 
-      <section className="card stack" aria-label="Weight log">
-        <h2>Log</h2>
-        {ws.length === 0 && <p className="muted">No weigh-ins yet.</p>}
-        {[...ws].reverse().map((w) => (
-          <div key={w.id} className="row between small">
-            <span className="num">{w.date}</span>
-            <span className="num">
-              {w.kg} kg{p.heightCm ? ` · BMI ${bmi(w.kg, p.heightCm)}` : ''}
-            </span>
-            <IconBtn label={`Edit ${w.date}`} onClick={() => setEditing(w)}>
-              ✎
-            </IconBtn>
-          </div>
-        ))}
+      <section className="group" aria-label="Weight log">
+        <div className="group-head">
+          <h2>Log</h2>
+          {ws.length > 0 && <span className="small muted num">{ws.length}</span>}
+        </div>
+        <div className="list">
+          {ws.length === 0 && <p className="empty">No weigh-ins yet. Log one above: same time of day (morning is easiest) gives the fairest trend.</p>}
+          {[...ws].reverse().map((w) => (
+            <div key={w.id} className="row-item weigh-row">
+              <span className="meta">
+                <b>{w.kg} kg</b>
+                <span className="sub num">
+                  {w.date}
+                  {p.heightCm ? ` · BMI ${bmi(w.kg, p.heightCm)}` : ''}
+                </span>
+              </span>
+              <IconBtn label={`Edit ${w.date}`} onClick={() => setEditing(w)}>
+                <Ico as={Pencil} size={18} />
+              </IconBtn>
+            </div>
+          ))}
+        </div>
       </section>
 
       <PhotoJournal game={game} />
@@ -121,14 +149,12 @@ function EditWeightSheet({ w, onClose }: { w: WeightEntry; onClose: () => void }
   return (
     <Sheet onClose={onClose}>
       <h2>Edit weigh-in</h2>
-      <div className="row wrap">
-        <Stepper label="Weight" unit="kg" value={kg} step={0.1} onChange={setKg} />
-        <label className="field">
-          Date
-          <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
-        </label>
-      </div>
-      <div className="row">
+      <Stepper label="Weight" unit="kg" value={kg} step={0.1} onChange={setKg} />
+      <label className="field">
+        Date
+        <input className="input" type="date" value={date} max={dayKey(Date.now())} onChange={(e) => setDate(e.target.value)} />
+      </label>
+      <div className="row sheet-footer">
         <button
           className="btn danger"
           onClick={async () => {
@@ -139,7 +165,7 @@ function EditWeightSheet({ w, onClose }: { w: WeightEntry; onClose: () => void }
         >
           Delete
         </button>
-        <button className="btn ghost grow" onClick={onClose}>
+        <button className="btn secondary grow" onClick={onClose}>
           Cancel
         </button>
         <button

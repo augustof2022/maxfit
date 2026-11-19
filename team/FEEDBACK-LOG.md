@@ -2,6 +2,8 @@
 
 Renz's feedback, newest first. Format: date — for which agent — what he said — the lesson.
 
+- 2026-11-18 (round 5) — ux-designer, frontend-dev, maxfit-pm — Rejected the v0.3.0 plan builder ("+ New plan" showed capsule chips with no details) and said the screens are not well designed. "Design work MUST use taste-skill and impeccable." — Standing rule (CLAUDE.md rule 12). Picker = a row list with details, filters and a config sheet; Train = place + My plans only; no workout without a plan; design system in docs/DESIGN.md.
+
 - 2026-11-18 — all agents (ux-designer, frontend-dev first) — "In the UI call them 'exercises', never 'moves' (e.g. 'show all exercises here')." — Wording rule: user-visible text says "exercise(s)". Fixed everywhere in round 4 (photo stat, hint text, Progress, Settings, demo sheet).
 
 - 2026-11-17 — maxfit-pm, ux-designer, frontend-dev — "Make it like: I input the name of a place, then select its equipment, so we have a library of equipment." — Places start with a name; equipment comes from a shared, searchable, grouped library that the user can extend.

@@ -51,3 +51,6 @@ what is missing, which task needs it, and what it would let you do. Do not work 
 
 Short: result, reasoning (options, assumptions, tests met / not met), sources, questions,
 risks, what you learned (also saved as one line with the date in your `MEMORY.md`).
+
+## Design skills (Renz, 2026-11-18)
+Before any design or UI work, load the skills `taste-skill` and `impeccable` with the Skill tool and follow them, plus `docs/DESIGN.md`. If they cannot be loaded, report it as a capability gap and follow their sources and `docs/DESIGN.md`.

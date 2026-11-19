@@ -11,6 +11,7 @@ import { addToPlan } from '../data/repo';
 import type { Game } from '../data/useGame';
 import { beep, buzz } from '../lib/alarm';
 import { Avatar } from './Avatar';
+import { Check, Plus } from './Icon';
 import { reducedMotion } from './ui';
 
 export type Reward =
@@ -164,7 +165,7 @@ function RewardCard({ game, r, total }: { game: Game; r: Reward; total: number }
         <p id="reward-body" className="reward-body">
           {body}
         </p>
-        {ex && <p className="reward-cue">💡 {ex.cue}</p>}
+        {ex && <p className="reward-cue">{ex.cue}</p>}
         {ex && (
           <div className="stack" style={{ gap: 6, width: '100%' }}>
             {plan ? (
@@ -180,7 +181,8 @@ function RewardCard({ game, r, total }: { game: Game; r: Reward; total: number }
                   }
                 }}
               >
-                {added ? `✓ Added to "${added}"` : inPlan ? `Already in "${plan.name}"` : fits ? `＋ Add to plan "${plan.name}"` : `Not doable at ${planLoc?.name ?? 'that place'}`}
+                {added ? <Check size={18} aria-hidden /> : !inPlan && fits ? <Plus size={18} aria-hidden /> : null}
+                {added ? `Added to "${added}"` : inPlan ? `Already in "${plan.name}"` : fits ? `Add to plan "${plan.name}"` : `Not doable at ${planLoc?.name ?? 'that place'}`}
               </button>
             ) : (
               <span className="small reward-body">Make a plan on Train to add it to.</span>

@@ -5,6 +5,7 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { db, SYNC_TABLES, type SyncTable } from '../data/db';
 import { isTableNotAllowed, mergeRow } from './merge';
+import { ensureStarterPlans } from '../data/repo';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -77,6 +78,8 @@ async function doSync(): Promise<SyncResult> {
   const startedAt = Date.now();
   const pulled = await pull();
   const pushed = await push(startedAt);
+  // Places that came down from the cloud get their Starter plan now, not at the next timer tick.
+  await ensureStarterPlans().catch(() => undefined);
   const result = { pushed, pulled, at: Date.now() };
   await setMeta('lastSync', result);
   return result;

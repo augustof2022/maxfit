@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ensureSeed, migrateRecords, type SessionSummary } from './data/repo';
+import { ensureSeed, ensureStarterPlans, migrateRecords, type SessionSummary } from './data/repo';
 import { useGame } from './data/useGame';
 import { Toast } from './components/ui';
 import { ConfirmHost } from './components/Confirm';
 import { UpdateBar } from './components/UpdateBar';
+import { ChartColumn, Dumbbell, House, PersonStanding, Settings, type LucideIcon } from './components/Icon';
 import { celebrate, CelebrateHost, rewardKey, type Reward } from './components/Celebrate';
 import { avatarStage, gearFor } from './core/rules';
 import { Home } from './screens/Home';
@@ -17,12 +18,12 @@ import { currentUser, syncConfigured, syncNow } from './lib/sync';
 
 export type Tab = 'home' | 'train' | 'progress' | 'body' | 'settings';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'home', label: 'Home', icon: 'M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
-  { id: 'train', label: 'Train', icon: 'M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12' },
-  { id: 'progress', label: 'Progress', icon: 'M4 20V10M10 20V4M16 20v-7M22 20H2' },
-  { id: 'body', label: 'Body', icon: 'M12 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM6 21l2-9h8l2 9M8 12l-3-2M16 12l3-2' },
-  { id: 'settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-2-4-2 1-2-1V5h-4v2l-2 1-2-1-2 4 2 1v0l-2 1 2 4 2-1 2 1v2h4v-2l2-1 2 1 2-4z' },
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'home', label: 'Home', icon: House },
+  { id: 'train', label: 'Train', icon: Dumbbell },
+  { id: 'progress', label: 'Progress', icon: ChartColumn },
+  { id: 'body', label: 'Body', icon: PersonStanding },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 /** Reward cards already shown in a session, kept for this tab (survives a reload). */
@@ -50,7 +51,10 @@ export default function App() {
   const clearToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
-    void ensureSeed().then(() => migrateRecords());
+    // Then every place gets its default Starter plan once (round 5).
+    void ensureSeed()
+      .then(() => migrateRecords())
+      .then(() => ensureStarterPlans());
   }, []);
 
   useEffect(() => {
@@ -78,6 +82,8 @@ export default function App() {
     if (!syncConfigured) return;
     const run = async () => {
       if (navigator.onLine && (await currentUser())) await syncNow().catch(() => undefined);
+      // Places pulled from the cloud get their Starter plan too.
+      await ensureStarterPlans().catch(() => undefined);
     };
     void run();
     const t = setInterval(run, 5 * 60_000);
@@ -147,9 +153,7 @@ export default function App() {
       <nav className="tabbar" aria-label="Main">
         {TABS.map((t) => (
           <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d={t.icon} />
-            </svg>
+            <t.icon size={24} strokeWidth={t.id === tab ? 2.25 : 2} aria-hidden />
             {t.label}
             {t.id === 'train' && game.d?.active && <span className="live-dot" aria-label="Session running" />}
           </button>

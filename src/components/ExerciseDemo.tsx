@@ -11,6 +11,7 @@ import type { Exercise } from '../core/types';
 import { db } from '../data/db';
 import { Avatar, actionFor } from './Avatar';
 import { Sheet } from './ui';
+import { CirclePlay, Ico, Lightbulb, TriangleAlert } from './Icon';
 
 export function ExerciseDemo({ ex, onClose, known }: { ex: Exercise; onClose: () => void; known: (id: string) => boolean }) {
   const p = useLiveQuery(() => db.profile.get('me'), []);
@@ -20,33 +21,38 @@ export function ExerciseDemo({ ex, onClose, known }: { ex: Exercise; onClose: ()
   const yt = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.name} exercise proper form`)}`;
   return (
     <Sheet onClose={onClose}>
-      <div className="row between">
+      <div className="stack" style={{ gap: 4 }}>
         <h2>{ex.name}</h2>
-        {base && <span className="badge">Variation of {base.name}</span>}
+        {base && <span className="note">Variation of {base.name}</span>}
       </div>
       {ex.demo ? (
         <figure className="demo" aria-label={`${ex.name}: start and finish photos`}>
           <img src={`./demos/${ex.id}-0.jpg`} alt={`${ex.name}, start position`} />
           <img src={`./demos/${ex.id}-1.jpg`} alt={`${ex.name}, finish position`} className="demo-b" />
-          <figcaption className="tiny muted">Start ⇄ finish · photos: free-exercise-db (public domain)</figcaption>
+          <figcaption className="tiny">Start and finish · photos: free-exercise-db (public domain)</figcaption>
         </figure>
       ) : (
-        <p className="small muted">No photo for this exercise yet. The avatar shows the idea; YouTube shows it in full.</p>
+        <p className="note">No photo for this exercise yet. The avatar shows the idea; YouTube shows it in full.</p>
       )}
-      <div className="row">
+      <div className="row" style={{ alignItems: 'flex-start' }}>
         <Avatar stage={2} gear={[]} color={color} size={96} style={p?.avatarStyle} gender={p?.gender} action={actionFor(ex.id)} />
         <div className="grow stack" style={{ gap: 6 }}>
-          <p>💡 {ex.cue}</p>
-          <span className="small muted">Works: {ex.muscles.join(', ')}</span>
-          {ex.equipment.length > 0 && <span className="small muted">Needs: {ex.equipment.map((id) => equipmentName(id)).join(', ')}</span>}
+          <p className="row" style={{ alignItems: 'flex-start', gap: 'var(--s2)' }}>
+            <Ico as={Lightbulb} size={18} style={{ color: 'var(--gold)', marginTop: 2 }} />
+            <span>{ex.cue}</span>
+          </p>
+          <span className="note">Works: {ex.muscles.join(', ')}</span>
+          {ex.equipment.length > 0 && <span className="note">Needs: {ex.equipment.map((id) => equipmentName(id)).join(', ')}</span>}
         </div>
       </div>
-      <p className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
+      <p className="note row" style={{ gap: 'var(--s2)' }}>
+        <Ico as={TriangleAlert} size={16} style={{ color: 'var(--text-3)' }} />
         Stop if you feel pain. Start easy; good form first, then more reps.
       </p>
-      <div className="row">
-        <a className="btn ghost grow" href={yt} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit' }}>
-          ▶ Watch on YouTube
+      <div className="row sheet-footer">
+        <a className="btn secondary grow" href={yt} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+          <Ico as={CirclePlay} size={18} />
+          Watch on YouTube
         </a>
         <button className="btn primary grow" onClick={onClose}>
           Got it

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DayTotal } from '../core/rules';
+import { Minus, Plus } from './Icon';
 
 export const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -71,7 +72,7 @@ export function Stepper({ value, onChange, step = 1, min = 0, label, unit }: { v
       {label}
       <div className="stepper">
         <button type="button" aria-label={`Less ${label}`} onClick={() => onChange(Math.max(min, round(value - step)))}>
-          -
+          <Minus size={20} aria-hidden />
         </button>
         <input
           className="input num"
@@ -86,7 +87,7 @@ export function Stepper({ value, onChange, step = 1, min = 0, label, unit }: { v
           aria-label={label}
         />
         <button type="button" aria-label={`More ${label}`} onClick={() => onChange(round(value + step))}>
-          +
+          <Plus size={20} aria-hidden />
         </button>
         {unit && <span className="muted">{unit}</span>}
       </div>

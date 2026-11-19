@@ -45,8 +45,8 @@ export function ConfirmHost() {
     <Sheet onClose={() => close(false)}>
       <h2>{p.title}</h2>
       {p.body && <p className="muted">{p.body}</p>}
-      <div className="row">
-        <button className="btn ghost grow" onClick={() => close(false)} autoFocus>
+      <div className="row" style={{ marginTop: 'var(--s2)' }}>
+        <button className="btn secondary grow" onClick={() => close(false)} autoFocus>
           Cancel
         </button>
         <button className={`btn grow ${p.danger ? 'danger solid' : 'primary'}`} onClick={() => close(true)}>

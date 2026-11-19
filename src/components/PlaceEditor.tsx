@@ -6,6 +6,7 @@ import type { EquipmentCategory, EquipmentItem, Location } from '../core/types';
 import { addEquipment, deleteLocation, saveLocation } from '../data/repo';
 import { confirmAsk } from './Confirm';
 import { Sheet } from './ui';
+import { Check, Ico, PlaceIcon, Plus, Search, Star } from './Icon';
 
 interface Props {
   loc: Partial<Location>;
@@ -80,46 +81,60 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
         Name of the place
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Anytime Fitness Cubao, Office gym, Home" autoFocus={!loc.id} maxLength={40} />
       </label>
-      <div className="row wrap" role="radiogroup" aria-label="Type of place">
+      <span className="field-label">Type of place</span>
+      <div className="chips wrap" role="radiogroup" aria-label="Type of place">
         {(['home', 'gym', 'outdoor', 'other'] as const).map((k) => (
           <button key={k} role="radio" aria-checked={kind === k} className={`chip ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-            {k === 'home' ? '🏠 Home' : k === 'gym' ? '🏋️ Gym' : k === 'outdoor' ? '🌳 Outdoor' : '📍 Other'}
+            <PlaceIcon kind={k} size={16} />
+            {k === 'home' ? 'Home' : k === 'gym' ? 'Gym' : k === 'outdoor' ? 'Outdoor' : 'Other'}
           </button>
         ))}
       </div>
 
-      <div className="row between">
+      <div className="group-head" style={{ marginTop: 'var(--s3)' }}>
         <h3>Equipment here</h3>
         <span className="badge num">{eq.length} selected</span>
       </div>
-      <div className="row wrap" aria-label="Quick fill">
+      <span className="field-label">Quick fill</span>
+      <div className="chips" aria-label="Quick fill">
         {PRESETS.map((p) => (
           <button key={p.id} className="chip" onClick={() => quickFill(p)}>
             {p.name}
           </button>
         ))}
       </div>
-      <input className="input" type="search" placeholder="Search equipment…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search equipment" />
+      <div className="search">
+        <Ico as={Search} size={18} />
+        <input className="input" type="search" placeholder="Search equipment…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search equipment" />
+      </div>
 
       {CATEGORIES.map((c) => {
         const items = shown.filter((e) => e.category === c.id);
         if (!items.length) return null;
         return (
           <div key={c.id} className="stack" style={{ gap: 6 }}>
-            <span className="tiny muted">{c.name}</span>
-            <div className="row wrap" style={{ gap: 6 }}>
+            <span className="cat-head">{c.name}</span>
+            <div className="chips wrap" style={{ gap: 6 }}>
               {items.map((e) => (
                 <button key={e.id} className={`chip ${eq.includes(e.id) ? 'on' : ''}`} aria-pressed={eq.includes(e.id)} onClick={() => toggle(e.id)}>
-                  {eq.includes(e.id) ? '✓ ' : ''}
+                  {eq.includes(e.id) && (
+                    <>
+                      <Ico as={Check} size={14} />
+                    </>
+                  )}
                   {e.name}
-                  {e.custom ? ' ★' : ''}
+                  {e.custom && (
+                    <>
+                      <Ico as={Star} size={14} />
+                    </>
+                  )}
                 </button>
               ))}
             </div>
           </div>
         );
       })}
-      {q && shown.length === 0 && <p className="small muted">"{query}" is not in the library yet.</p>}
+      {q && shown.length === 0 && <p className="note">"{query}" is not in the library yet.</p>}
 
       {adding ? (
         <div className="card flat stack">
@@ -133,7 +148,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
             ))}
           </select>
           <div className="row">
-            <button className="btn ghost grow" onClick={() => setAdding(false)}>
+            <button className="btn secondary grow" onClick={() => setAdding(false)}>
               Cancel
             </button>
             <button className="btn primary grow" disabled={!newName.trim() || busy} onClick={addNew}>
@@ -143,19 +158,20 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
         </div>
       ) : (
         <button
-          className="btn ghost"
+          className="btn secondary"
           onClick={() => {
             setNewName(query);
             setAdding(true);
           }}
         >
-          + Add new equipment{query ? ` "${query}"` : ''}
+          <Ico as={Plus} size={18} />
+          Add new equipment{query ? ` "${query}"` : ''}
         </button>
       )}
 
-      <p className="small banner">
-        With this equipment: <b>{doable.length}</b> MaxFit exercises, <b>{doableNow.length}</b> unlocked now.
-        {eq.some((id) => id.startsWith('custom-')) && ' ★ = your own item (saved in your library; no built-in exercise uses it yet).'}
+      <p className="note num">
+        With this equipment: <b style={{ color: 'var(--text)' }}>{doable.length}</b> MaxFit exercises, <b style={{ color: 'var(--text)' }}>{doableNow.length}</b> unlocked now.
+        {eq.some((id) => id.startsWith('custom-')) && ' The star marks your own items (saved in your library; no built-in exercise uses them yet).'}
       </p>
 
       <div className="row sheet-footer">
@@ -171,7 +187,7 @@ export function PlaceEditor({ loc, customEquipment, unlocked, canDelete, onClose
             Delete
           </button>
         )}
-        <button className="btn ghost grow" onClick={() => onClose()}>
+        <button className="btn secondary grow" onClick={() => onClose()}>
           Cancel
         </button>
         <button className="btn primary grow" disabled={!name.trim() || busy} onClick={save}>

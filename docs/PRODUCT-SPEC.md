@@ -35,5 +35,14 @@ Status key: ✅ built and tested · 🟡 built, needs a device or Renz's action 
 | R4-7 | BMI bar animation | Marker slides into place with a soft fill, 1 s; in place with reduced motion | Worker screenshots (settled + mid-slide) | ✅ |
 | R4-8 | Gender | Settings → You: Male / Female (synced in the profile). Female avatar: same stages, gear and moves, female body shape and hair, all 3 styles | E2E: Female saved; worker screenshots | ✅ |
 
+## Round 5 — v0.4.0 (Boss R, 2026-11-18: plan builder rejected, screens "not well designed")
+
+| # | Item | What we built | Test | Status |
+|---|---|---|---|---|
+| R5-1 | Train = place + My plans only | Train shows "Where are you today?" (+ Place) and "My plans at <place>" (+ New plan). Rows: name, description, N exercises, last used, Start. Tap a row → the plan opens (exercises, Edit plan, Duplicate, Delete); Import below the list. The old Starter card and the "You can do here" list are gone | E2E: only 2 sections, Start on rows, Edit plan | ✅ |
+| R5-2 | No workout without a plan | Every place gets one real, editable "Starter plan" (fixed id `starter-<place>`, max 3 exercises, seed row with updatedAt 0). New places get one too; a deleted one stays deleted; existing users get it once | Unit: once per place, concurrent runs, delete sticks, new place, editing makes it a normal plan. E2E: Home and a new place | ✅ |
+| R5-3 | Exercise picker (row list) | New plan and Edit plan show a list: name, body parts, description, Watch the steps, Last (date), Best, "→ Beat", + Add. + Add → sheet: sets, target, how to beat → back with search + filters kept, row shows "Added". Filters: search, Cardio / body parts, Any / Bodyweight / Equipment. Only unlocked exercises doable at the place | Unit: search, areas, kit, chips. E2E: row contents, every filter, sheet, Added + kept search | ✅ |
+| R5-4 | Design pass, every screen | docs/DESIGN.md (from impeccable + taste-skill sources): tokens, one button family, grouped lists, Lucide icons instead of emoji, no eyebrows, 150–250 ms motion, Cinzel only on the reward card | Screenshots of every screen and state at 412×915 in docs/screens/round5/ | ✅ (skills not installable here: followed from source) |
+
 ## Out of scope for v0.1 (see `team/BACKLOG.md`)
 Exercise images/videos, custom exercises, Play Store release, social features, GPS distance.

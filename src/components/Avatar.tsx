@@ -6,7 +6,6 @@
 // waist, slightly wider hips and shoulder-length hair.
 // Motion is CSS (see .av-* in styles.css): calm loops, eased; off when the phone asks for reduced motion.
 
-import '../styles-extra.css';
 import { useEffect, useId, useState, type CSSProperties } from 'react';
 import type { AvatarStyle, Gender } from '../core/types';
 

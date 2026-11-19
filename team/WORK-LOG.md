@@ -69,3 +69,25 @@
   from before plans keeps today's plans; (5) plans of a deleted place stay importable; (6) timer Cancel after GO asks first,
   44 px; (7) reward cards remembered per session across a reload; (8) an old photo gets its own day's "I did" lines; (9) BMI rAF.
 - Checks after fixes: 103 unit tests, e2e 47/47. Re-review (code-reviewer): pass; its nit (timer rest flag kept too long) fixed — the flag now belongs to the timed exercise.
+
+## 2026-11-18 — Round 5: plan builder redo + design pass on every screen (v0.4.0)
+- Brief from the Chief of Staff, cleared by Boss R. He rejected the v0.3.0 plan builder (chips with no details) and said the screens are not well designed. New standing rule: design work uses taste-skill + impeccable (CLAUDE.md rule 12).
+- Capability gap: neither skill is installed in cloud sessions. I read the published sources (impeccable 4.10.0 Operate mode + craft floor; taste-skill 2.5.1 system/checklist rules) and followed impeccable's "launcher unavailable" path; no downloaded binary was run. The Chief of Staff OK'd this.
+- maxfit-pm (high):
+  - Design foundation: docs/DESIGN.md, tokens, Lucide icons, Cinzel on the reward card.
+  - Train = place + My plans; default Starter plan per place (fixed id, seed row).
+  - Exercise picker + config sheet; session, timer and overlay redesign.
+  - e2e + `npm run screens`.
+- frontend-dev (medium): design pass on Home, Progress, Body, Settings, Summary, photos, place editor, demo, history.
+- Review (code-reviewer, high): changes requested → all fixed.
+  - Must-fix: confirms were hidden under the full-page editor. Fixed, plus an e2e "on top and tappable" check, proved by reverting the fix once.
+  - Also fixed: Starter seeding moved outside write locks; Starter plans after sync and wipe; "how to beat" copy and errors; one live region; focus into the editor; lost .pop/.bar.full; 44 px segments; named icon exports.
+  - Re-review: pass.
+- Checks: typecheck clean; 110 unit tests (25 new); e2e 56/56; balance unchanged (L15 / 57); 27 screenshots at 412×915 in docs/screens/round5/.
+- Chief of Staff screenshot review (impeccable critique): not OK yet → fixed all 6.
+  - P1: compact plan editor, so the first exercise row and its + Add show without scrolling (e2e check); description behind "+ Description"; "N added · Review" summary bar; no duplicate header Save.
+  - P1: Home's Start opens a plan sheet; no plan-less start anywhere (e2e check).
+  - P2: one-option "How to beat it" as plain text; help line "Your best: 12 reps. 13 beats it."
+  - P2: Lucide minus/plus on steppers; Finish session neutral (one accent).
+  - P3: more bottom padding, plus a real-viewport screenshot (03b).
+  - Checks: unit 110, e2e 58/58.

@@ -1,7 +1,7 @@
 {
   "name": "maxfit",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "MaxFit - a gym and fitness tracker that plays like a game: unlock exercises, beat your records, evolve your avatar.",
   "scripts": {
@@ -14,15 +14,18 @@
     "e2e": "node tests/e2e/smoke.mjs",
     "balance": "tsx scripts/balance-sim.ts",
     "cap:sync": "npm run build && npx cap sync android",
-    "cap:android": "npx cap add android"
+    "cap:android": "npx cap add android",
+    "screens": "node tests/e2e/screens.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",
     "@capacitor/core": "^8.6.2",
     "@capacitor/local-notifications": "^8.3.1",
+    "@fontsource/cinzel": "^5.1.0",
     "@supabase/supabase-js": "^2.119.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
+    "lucide-react": "^0.468.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

@@ -5,10 +5,11 @@ import { useState } from 'react';
 import { EXERCISE_BY_ID } from '../core/exercises';
 import { fmtDay, fmtRecord, lastBestText } from '../core/format';
 import { chartPoint, historyByDay } from '../core/history';
-import { fmtValues, iconFor, MEASURES } from '../core/measures';
+import { fmtValues, MEASURES } from '../core/measures';
 import type { Exercise } from '../core/types';
 import type { Game } from '../data/useGame';
 import { LineChart, Sheet } from './ui';
+import { ChevronRight, ExIcon, Ico, Trophy, X } from './Icon';
 
 /** One exercise row: icon, name, "Last … · Best …". Tap = history. */
 export function ExerciseRow({ game, ex, onOpen, extra }: { game: Game; ex: Exercise; onOpen: (ex: Exercise) => void; extra?: string }) {
@@ -17,19 +18,15 @@ export function ExerciseRow({ game, ex, onOpen, extra }: { game: Game; ex: Exerc
   const rec = d.stats.records.get(ex.id);
   return (
     <button className="ex-row" onClick={() => onOpen(ex)} aria-label={`${ex.name} history`}>
-      <span className="ico" aria-hidden>
-        {iconFor(ms)}
-      </span>
-      <span className="grow stack" style={{ gap: 2 }}>
+      <ExIcon ms={ms} exerciseId={ex.id} />
+      <span className="meta grow" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <b>
           {ex.name}
           {extra && <span className="small muted"> · {extra}</span>}
         </b>
         <span className="small muted num">{lastBestText(ms, rec)}</span>
       </span>
-      <span className="muted" aria-hidden>
-        📈
-      </span>
+      <Ico as={ChevronRight} className="chev" style={{ color: 'var(--text-3)' }} />
     </button>
   );
 }
@@ -51,20 +48,23 @@ export function DoneExercises({ game, limit, title = "Exercises you've done", fi
   const list = doneExercises(game).filter((e) => !filter || filter(e));
   const shown = limit && !all ? list.slice(0, limit) : list;
   return (
-    <section className="card stack" aria-label={title}>
-      <div className="row between">
+    <section className="group" aria-label={title}>
+      <div className="group-head">
         <h2>{title}</h2>
-        <span className="small muted">{list.length}</span>
+        {limit && list.length > limit ? (
+          <button className="btn quiet" onClick={() => setAll(!all)}>
+            {all ? 'Show less' : `Show all ${list.length}`}
+          </button>
+        ) : (
+          list.length > 0 && <span className="small muted num">{list.length}</span>
+        )}
       </div>
-      {list.length === 0 && <p className="small muted">Nothing logged yet. Your first set shows up here, with your record.</p>}
-      {shown.map((e) => (
-        <ExerciseRow key={e.id} game={game} ex={e} onOpen={setOpen} />
-      ))}
-      {limit && list.length > limit && (
-        <button className="btn ghost" onClick={() => setAll(!all)}>
-          {all ? 'Show less' : `Show all ${list.length}`}
-        </button>
-      )}
+      <div className="list">
+        {list.length === 0 && <p className="empty">Nothing logged yet. Start a session and log one set: it shows up here with your record.</p>}
+        {shown.map((e) => (
+          <ExerciseRow key={e.id} game={game} ex={e} onOpen={setOpen} />
+        ))}
+      </div>
       {open && <HistorySheet game={game} ex={open} onClose={() => setOpen(null)} />}
     </section>
   );
@@ -83,11 +83,11 @@ export function HistorySheet({ game, ex, onClose }: { game: Game; ex: Exercise; 
   const unitLabel = first ? MEASURES.find((m) => m.id === first.measure)!.label : '';
   return (
     <Sheet onClose={onClose}>
-      <div className="row between">
-        <h2>
-          {iconFor(ms)} {ex.name}
-        </h2>
-        <button className="btn ghost icon-btn" onClick={onClose}>
+      <div className="sheet-title">
+        <ExIcon ms={ms} exerciseId={ex.id} />
+        <h2>{ex.name}</h2>
+        <button className="btn secondary icon-btn" onClick={onClose}>
+          <Ico as={X} size={18} />
           Close
         </button>
       </div>
@@ -107,18 +107,23 @@ export function HistorySheet({ game, ex, onClose }: { game: Game; ex: Exercise; 
       </div>
       {rec?.bestSet && <p className="small muted">Record: {fmtRecord(ms, rec)}</p>}
       <div className="stack" style={{ gap: 4 }}>
-        <span className="tiny muted">
-          Trend · {unitLabel} (best set of each day){days.some((x) => x.record) ? ' · ◎ = record day' : ''}
+        <span className="note">
+          Trend · {unitLabel} (best set of each day){days.some((x) => x.record) ? ' · ringed = record day' : ''}
         </span>
         <LineChart points={pts.map((x) => ({ label: fmtDay(x.date), v: chartPoint(x.best, ms, beat).v }))} marks={pts.map((x) => x.record)} unit={first?.unit ?? ''} empty="Do it on 2 or more days to see your trend." />
       </div>
-      <div className="stack" style={{ gap: 6 }} role="list" aria-label={`${ex.name} by day`}>
-        {days.length === 0 && <p className="small muted">Not done yet. Log a set and it shows up here.</p>}
+      <div className="list" role="list" aria-label={`${ex.name} by day`}>
+        {days.length === 0 && <p className="empty">Not done yet. Log a set and it shows up here.</p>}
         {days.map((x) => (
-          <div key={x.date} role="listitem" className="row between small hist-row">
+          <div key={x.date} role="listitem" className="hist-row">
             <span>{fmtDay(x.date, true)}</span>
             <span className="num">
-              <b>{fmtValues(shownMs, x.best)}</b> {x.record && <span className="badge pr">🏆 Record</span>}
+              <b>{fmtValues(shownMs, x.best)}</b> {x.record && (
+                <span className="badge pr">
+                  <Ico as={Trophy} size={12} />
+                  Record
+                </span>
+              )}
             </span>
             <span className="muted num">
               {x.sets} {x.sets === 1 ? 'set' : 'sets'}

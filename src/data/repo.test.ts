@@ -334,3 +334,36 @@ describe('auto rest', () => {
     expect((await db.sessions.get(s.id))!.live!.mode).toBe('rest');
   });
 });
+
+import { ensureStarterPlans, saveLocation, starterPlanId } from './repo';
+describe('default Starter plan per place (round 5)', () => {
+  it('every place gets one editable "Starter plan" with at most 3 exercises, made once', async () => {
+    await Promise.all([ensureStarterPlans(), ensureStarterPlans()]);
+    const plans = (await db.plans.toArray()).filter((p) => !p.deleted);
+    expect(plans.map((p) => p.id).sort()).toEqual(['starter-gym', 'starter-home']);
+    for (const p of plans) {
+      expect(p.name).toBe('Starter plan');
+      expect(p.items.length).toBeGreaterThan(0);
+      expect(p.items.length).toBeLessThanOrEqual(3);
+      expect(p.updatedAt).toBe(0); // a seed: any real copy from the cloud wins
+    }
+    expect(await ensureStarterPlans()).toBe(0);
+  });
+
+  it('a deleted Starter plan is not made again; a new place gets its own', async () => {
+    await ensureStarterPlans();
+    await deletePlan(starterPlanId('home'));
+    expect(await ensureStarterPlans()).toBe(0);
+    expect((await db.plans.get('starter-home'))!.deleted).toBe(true);
+    const id = await saveLocation({ name: 'Park', kind: 'outdoor', equipment: [] });
+    expect(await db.plans.get(starterPlanId(id))).toMatchObject({ name: 'Starter plan', locationId: id });
+  });
+
+  it('editing the Starter plan makes it a normal synced plan (newer than the seed)', async () => {
+    await ensureStarterPlans();
+    const p = (await db.plans.get('starter-home'))!;
+    await savePlan({ id: p.id, name: 'Home quick', description: '', locationId: 'home', items: p.items });
+    expect((await db.plans.get('starter-home'))!).toMatchObject({ name: 'Home quick' });
+    expect((await db.plans.get('starter-home'))!.updatedAt).toBeGreaterThan(0);
+  });
+});

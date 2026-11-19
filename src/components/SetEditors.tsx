@@ -6,6 +6,7 @@ import type { Beat, Exercise, Measure, WorkSet } from '../core/types';
 import { deleteSet, setExerciseTrack, updateSet } from '../data/repo';
 import { confirmAsk } from './Confirm';
 import { Sheet, Stepper } from './ui';
+import { Minus, Plus, Square, Timer } from './Icon';
 
 const LABEL = (m: Measure) => MEASURES.find((x) => x.id === m)!.label;
 const FIXED: { id: 'weight' | 'distance'; label: string }[] = [
@@ -159,7 +160,7 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
       {label} <span className="tiny muted" style={{ textTransform: 'none', letterSpacing: 0 }}>(seconds or m:ss)</span>
       <div className="stepper">
         <button type="button" aria-label={`Less ${label}`} disabled={running !== null} onClick={() => onChange(Math.max(0, Math.round((value - step) * 10) / 10))}>
-          -
+          <Minus size={20} aria-hidden />
         </button>
         <input
           className="input num"
@@ -175,7 +176,7 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
           }}
         />
         <button type="button" aria-label={`More ${label}`} disabled={running !== null} onClick={() => onChange(Math.round((value + step) * 10) / 10)}>
-          +
+          <Plus size={20} aria-hidden />
         </button>
         <button
           type="button"
@@ -191,7 +192,7 @@ export function DurationInput({ label, value, onChange, fine }: { label: string;
             }
           }}
         >
-          {running !== null ? '■' : '⏱'}
+          {running !== null ? <Square size={16} fill="currentColor" aria-hidden /> : <Timer size={20} aria-hidden />}
         </button>
       </div>
     </label>
