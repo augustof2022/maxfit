@@ -241,7 +241,7 @@ export function ConfigSheet({ game, ex, item, okLabel, onClose }: { game: Game; 
       <div className="stack" style={{ gap: 6 }}>
         <span className="tiny">How to beat it</span>
         {options.length === 1 ? (
-          <p className="small" role="note" aria-label="How to beat it">
+          <p className="small" data-beat-rule>
             <b>{options[0].label}</b>
             <span className="muted"> · {ex.equipment.length === 0 && !ex.measures.includes('weight') ? 'bodyweight exercise: more reps or time is a record' : 'one better number, none worse'}</span>
           </p>

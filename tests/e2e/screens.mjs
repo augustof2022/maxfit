@@ -88,7 +88,7 @@ try {
   await shot('05-picker-filter-cardio');
   await page.getByRole('radio', { name: 'All', exact: true }).click();
   await page.getByRole('button', { name: 'Add Push-up', exact: true }).click();
-  await page.locator('[aria-label="How to beat it"]').waitFor();
+  await page.getByText('How to beat it', { exact: true }).waitFor();
   await shot('06-config-sheet');
   await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
   await page.getByRole('button', { name: 'Add Run in place', exact: true }).click();

@@ -256,7 +256,7 @@ try {
   const searchOk = (await page.getByRole('button', { name: 'Add Push-up' }).count()) === 1 && (await page.getByRole('button', { name: 'Add Run in place' }).count()) === 0;
   check('Picker filters: cardio, bodyweight, equipment, search', cardioOk && bwOk && eqOk && searchOk, `cardio=${cardioOk} bw=${bwOk} eq=${eqOk} search=${searchOk}`);
   await page.getByRole('button', { name: 'Add Push-up' }).click();
-  await page.locator('[aria-label="How to beat it"]').waitFor();
+  await page.getByText('How to beat it', { exact: true }).waitFor();
   check('+ Add opens the config sheet: sets, target, how to beat', (await page.getByRole('textbox', { name: 'Sets', exact: true }).count()) === 1 && (await page.getByRole('textbox', { name: 'Reps', exact: true }).count()) === 1);
   await page.getByRole('button', { name: 'More Sets' }).click();
   await shot('19b-config-sheet');

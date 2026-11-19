@@ -204,6 +204,7 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
   const [showDesc, setShowDesc] = useState(!!draft.description);
   // "In this plan" is a summary bar that opens the reorder / remove list (the list below is for adding).
   const [review, setReview] = useState(false);
+  const summaryRef = useRef<HTMLButtonElement>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const loc = game.locations.find((l) => l.id === locationId) ?? null;
@@ -287,7 +288,7 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
         </section>
 
         <section className="editor-summary" aria-label="Exercises in this plan">
-          <button className="summary-bar" onClick={() => setReview(!review)} aria-expanded={review} disabled={items.length === 0}>
+          <button ref={summaryRef} className="summary-bar" onClick={() => setReview(!review)} aria-expanded={review} disabled={items.length === 0}>
             <span className="grow">
               {items.length === 0 ? 'No exercises yet: tap + Add below' : `${items.length} added`}
               {invalid > 0 && <span style={{ color: 'var(--bad)' }}> · {invalid} not doable here</span>}
@@ -321,7 +322,11 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
                       <button className="btn icon secondary" aria-label={`Move ${ex.name} down`} disabled={i === items.length - 1} onClick={() => setItems((c) => moveItem(c, i, 1))}>
                         <ArrowDown size={18} aria-hidden />
                       </button>
-                      <button className="btn icon secondary" aria-label={`Remove ${ex.name}`} onClick={() => setItems((c) => c.filter((_, j) => j !== i))}>
+                      <button className="btn icon secondary" aria-label={`Remove ${ex.name}`} onClick={() => {
+                          // Removing the last one closes the list: keep focus on the summary bar, not lost on the page.
+                          if (items.length === 1) summaryRef.current?.focus();
+                          setItems((c) => c.filter((_, j) => j !== i));
+                        }}>
                         <Trash2 size={18} aria-hidden />
                       </button>
                     </div>
