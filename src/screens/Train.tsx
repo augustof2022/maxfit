@@ -8,7 +8,7 @@ import { fmtRecord, fmtSet, lastBestText } from '../core/format';
 import { fmtPlanItem, hasTarget } from '../core/plans';
 import { PlansSection } from '../components/Plans';
 import { HistorySheet } from '../components/ExerciseHistory';
-import { Activity, AlarmClock, CirclePlay, ExIcon, Footprints, Pause, Pencil, PersonStanding, PlaceIcon, Play, Plus, Ruler, Square, Timer, TrendingUp } from '../components/Icon';
+import { Activity, AlarmClock, CircleCheck, CirclePlay, ExIcon, Footprints, Pause, Pencil, PersonStanding, PlaceIcon, Play, Plus, Ruler, Square, Timer, TrendingUp } from '../components/Icon';
 import { TimerOverlay } from '../components/TimerOverlay';
 import { ExerciseDemo } from '../components/ExerciseDemo';
 import { fmtLevel, fmtValues, isCardioFlow, levelOf } from '../core/measures';
@@ -319,8 +319,9 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
         <button className="btn danger" onClick={() => setConfirmEnd('discard')}>
           Discard
         </button>
-        <button className="btn good grow" onClick={() => setConfirmEnd('finish')} disabled={!!live.cardio || sessionSets.length === 0}>
-          Finish session
+        {/* One accent: Finish is the neutral end action; orange stays for "do the set" (Chief of Staff review). */}
+        <button className="btn secondary grow" onClick={() => setConfirmEnd('finish')} disabled={!!live.cardio || sessionSets.length === 0}>
+          <CircleCheck size={20} aria-hidden /> Finish session
         </button>
       </div>
       {sessionSets.length === 0 && !live.cardio && <p className="small muted">Log at least one set or a run to finish. Even one set counts!</p>}
@@ -336,7 +337,7 @@ function ActiveSession({ game, toast, onFinished, session }: Props & { session: 
               Back
             </button>
             {confirmEnd === 'finish' ? (
-              <button className="btn good grow" onClick={finish} disabled={busy}>
+              <button className="btn primary grow" onClick={finish} disabled={busy}>
                 Finish
               </button>
             ) : (

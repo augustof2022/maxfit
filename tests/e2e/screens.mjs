@@ -65,13 +65,20 @@ try {
   await page.getByRole('heading', { name: /Hi, Renz/ }).waitFor();
   await shot('01-home');
   await shot('01b-home-full', true);
+  await page.getByRole('button', { name: 'Start session' }).click();
+  await page.getByRole('heading', { name: /Start a plan/ }).waitFor();
+  await shot('01c-home-start-sheet');
+  await page.getByRole('button', { name: 'Change place or edit plans' }).click();
 
   // Train: place + My plans
-  await tab('Train');
   await page.getByRole('heading', { name: 'My plans at Home' }).waitFor();
   await shot('02-train');
   await page.getByRole('button', { name: /^Starter plan, / }).click();
-  await shot('03-plan-open', true);
+  await shot('03-plan-open');
+  // Real viewport, scrolled to the end: the last rows clear the tab bar (no full-page capture artefact).
+  await page.mouse.wheel(0, 3000);
+  await shot('03b-plan-open-bottom');
+  await page.mouse.wheel(0, -3000);
 
   // New plan: picker, filter, config sheet, editing
   await page.getByRole('button', { name: 'New plan', exact: true }).first().click();
@@ -81,19 +88,22 @@ try {
   await shot('05-picker-filter-cardio');
   await page.getByRole('radio', { name: 'All', exact: true }).click();
   await page.getByRole('button', { name: 'Add Push-up', exact: true }).click();
-  await page.getByRole('radiogroup', { name: 'How to beat it' }).waitFor();
+  await page.locator('[aria-label="How to beat it"]').waitFor();
   await shot('06-config-sheet');
   await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
   await page.getByRole('button', { name: 'Add Run in place', exact: true }).click();
   await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
   await shot('07-picker-added');
   await page.getByPlaceholder('e.g. Push day').fill('Push and cardio');
+  await page.getByRole('button', { name: 'Description', exact: true }).click();
   await page.getByPlaceholder(/Chest and arms/).fill('Chest first, then a short run in place');
   await page.locator('.page-body').evaluate((el) => el.scrollTo(0, 0));
   await shot('08-plan-editor-top');
+  await page.getByRole('button', { name: /2 added/ }).click();
+  await shot('08b-plan-editor-review');
   await page.getByRole('button', { name: /^Save plan/ }).click();
   await page.waitForTimeout(400);
-  await shot('09-train-with-plans', true);
+  await shot('09-train-with-plans');
 
   // Session from the plan
   await page.getByRole('button', { name: 'Start Push and cardio', exact: true }).click();

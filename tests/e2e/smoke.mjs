@@ -67,8 +67,16 @@ try {
   check('Goal prompt shows on first open', await page.getByRole('heading', { name: 'What is your goal?' }).isVisible());
   await shot('01-home');
 
-  // Train: location picker -> Home has no dumbbells
+  // Home's Start opens the plans of this place: there is no plan-less session anywhere (Chief of Staff review).
   await page.getByRole('button', { name: 'Start session' }).click();
+  await page.getByRole('heading', { name: 'Start a plan at Home' }).waitFor();
+  const activeAfterHomeStart = await page.evaluate(async () => {
+    const { db } = await import('/src/data/db.ts');
+    return (await db.sessions.toArray()).filter((x) => x.status === 'active' && !x.deleted).length;
+  });
+  check('Home cannot start a plan-less session: Start shows the plans', activeAfterHomeStart === 0 && (await page.getByRole('button', { name: 'Start Starter plan', exact: true }).count()) === 1);
+  await shot('01b-home-start-sheet');
+  await page.getByRole('button', { name: 'Change place or edit plans' }).click();
   await page.getByRole('heading', { name: 'Train' }).waitFor();
   // Round 5: Train = "Where are you today?" + "My plans at <place>" only; every place has a Starter plan.
   await page.getByRole('heading', { name: 'My plans at Home' }).waitFor();
@@ -227,6 +235,10 @@ try {
   // ---- Exercise plans per place (Boss R, 2026-11-18) ----
   await page.getByRole('radio', { name: 'Gym', exact: true }).first().click();
   await page.getByRole('button', { name: 'New plan', exact: true }).first().click();
+  // The first exercise row and its + Add are on the first screen, above the Save bar, without scrolling.
+  const firstAdd = await page.getByRole('button', { name: /^Add / }).first().boundingBox();
+  const footTop = (await page.locator('.page-foot').boundingBox()).y;
+  check('New plan: the first exercise row with + Add is visible without scrolling', !!firstAdd && firstAdd.y > 0 && firstAdd.y + firstAdd.height <= footTop, `add bottom=${firstAdd && Math.round(firstAdd.y + firstAdd.height)} foot=${Math.round(footTop)}`);
   // + New plan = the row list: name, body parts, description, Watch the steps, my last, beat target, + Add.
   const pushRow = page.getByRole('listitem', { name: 'Push-up', exact: true });
   check('Picker row: name, body parts, description, Watch the steps, Last, Beat, + Add', /Chest, Arms, Shoulders/.test(await pushRow.textContent()) && /Body straight/.test(await pushRow.textContent()) && (await pushRow.getByRole('button', { name: 'Watch the steps: Push-up' }).count()) === 1 && /Last .*Beat: /.test(await pushRow.textContent()) && (await pushRow.getByRole('button', { name: 'Add Push-up' }).count()) === 1);
@@ -244,7 +256,7 @@ try {
   const searchOk = (await page.getByRole('button', { name: 'Add Push-up' }).count()) === 1 && (await page.getByRole('button', { name: 'Add Run in place' }).count()) === 0;
   check('Picker filters: cardio, bodyweight, equipment, search', cardioOk && bwOk && eqOk && searchOk, `cardio=${cardioOk} bw=${bwOk} eq=${eqOk} search=${searchOk}`);
   await page.getByRole('button', { name: 'Add Push-up' }).click();
-  await page.getByRole('radiogroup', { name: 'How to beat it' }).waitFor();
+  await page.locator('[aria-label="How to beat it"]').waitFor();
   check('+ Add opens the config sheet: sets, target, how to beat', (await page.getByRole('textbox', { name: 'Sets', exact: true }).count()) === 1 && (await page.getByRole('textbox', { name: 'Reps', exact: true }).count()) === 1);
   await page.getByRole('button', { name: 'More Sets' }).click();
   await shot('19b-config-sheet');
@@ -256,7 +268,10 @@ try {
     await page.getByRole('button', { name: 'Add to plan', exact: true }).click();
   }
   await page.getByPlaceholder('e.g. Push day').fill('Gym A');
+  await page.getByRole('button', { name: 'Description', exact: true }).click();
   await page.getByPlaceholder(/Chest and arms/).fill('Quick full body');
+  // "In this plan" is a summary bar; Review opens the reorder / remove list.
+  await page.getByRole('button', { name: /3 added/ }).click();
   await page.getByRole('button', { name: 'Move Run in place up' }).click();
   check('Plan item keeps its sets from the sheet (4 sets)', /4 sets/.test(await page.getByRole('listitem', { name: 'Plan exercise 1: Push-up' }).textContent()));
   await shot('20-plan-editor');
@@ -283,6 +298,7 @@ try {
   await page.getByRole('region', { name: 'Plan Gym A' }).waitFor();
   // Editing is obvious on the open plan: "Edit plan".
   await page.getByRole('button', { name: 'Edit plan', exact: true }).click();
+  await page.getByRole('button', { name: /3 added/ }).click();
   await page.getByRole('button', { name: 'Remove Dumbbell curl' }).click();
   await shot('21b-plan-edit');
   // Code review round 5: a confirm opened from the editor must be on top and tappable.

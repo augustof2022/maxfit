@@ -3,6 +3,9 @@ import { Avatar } from '../components/Avatar';
 import { Bar, CountUp, WeekChart } from '../components/ui';
 import { GoalPicker } from '../components/GoalPicker';
 import { DoneExercises } from '../components/ExerciseHistory';
+import { StartPlanSheet } from '../components/Plans';
+import { keepAwake } from '../lib/alarm';
+import { useState } from 'react';
 import { ChevronRight, Flame, Gift, Ico, Scale, Zap } from '../components/Icon';
 import { EXERCISE_BY_ID, EXERCISES } from '../core/exercises';
 import { fmtValues, mainMeasure } from '../core/measures';
@@ -10,6 +13,7 @@ import { AVATAR_STAGES, COLORS, nextUnlockHints, STARTER_SESSIONS, dayKey } from
 import type { Game } from '../data/useGame';
 
 export function Home({ game, go }: { game: Game; go: (t: Tab) => void }) {
+  const [picking, setPicking] = useState(false);
   const p = game.profile!;
   const d = game.d!;
   const color = COLORS.find((c) => c.id === p.color)?.hex ?? '#ff7a1a';
@@ -69,9 +73,25 @@ export function Home({ game, go }: { game: Game; go: (t: Tab) => void }) {
             : 'Your goal grows by 5 minutes after every 5 days you meet it.'}
           {last2.length === 2 && ` Last 2 days: ${Math.round(min(last2[0]) + min(last2[1]))} min. Yesterday: ${Math.round(min(last2[1]))} min.`}
         </p>
-        <button className="btn primary big" onClick={() => go('train')}>
+        {/* No workout without a plan: Start opens the plans of this place (Chief of Staff review, round 5). */}
+        <button className="btn primary big" onClick={() => (d.active ? go('train') : setPicking(true))}>
           {d.active ? 'Continue session' : 'Start session'}
         </button>
+        {picking && (
+          <StartPlanSheet
+            game={game}
+            onClose={() => setPicking(false)}
+            onTrain={() => {
+              setPicking(false);
+              go('train');
+            }}
+            onStarted={() => {
+              setPicking(false);
+              void keepAwake(true);
+              go('train');
+            }}
+          />
+        )}
       </section>
 
       {weighDue && (

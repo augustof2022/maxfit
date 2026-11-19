@@ -124,6 +124,15 @@ export function ExercisePicker({ game, locationId, added, onAdd }: { game: Game;
                     <span className="name">{ex.name}</span>
                     <span className="parts">{bodyParts(ex)}{ex.equipment.length ? '' : ' · Bodyweight'}</span>
                   </div>
+                  {isAdded ? (
+                    <span className="added-mark">
+                      <Check size={18} aria-hidden /> Added
+                    </span>
+                  ) : (
+                    <button className="btn primary sm" onClick={() => setConfiguring(ex)} aria-label={`Add ${ex.name}`}>
+                      <Plus size={18} aria-hidden /> Add
+                    </button>
+                  )}
                 </div>
                 <p className="cue clamp2">{ex.cue}</p>
                 <div className="numbers">
@@ -135,15 +144,6 @@ export function ExercisePicker({ game, locationId, added, onAdd }: { game: Game;
                   <button className="btn quiet" onClick={() => setDemo(ex)} aria-label={`Watch the steps: ${ex.name}`}>
                     <CirclePlay size={18} aria-hidden /> Watch the steps
                   </button>
-                  {isAdded ? (
-                    <span className="added-mark">
-                      <Check size={18} aria-hidden /> Added
-                    </span>
-                  ) : (
-                    <button className="btn primary sm" onClick={() => setConfiguring(ex)} aria-label={`Add ${ex.name}`}>
-                      <Plus size={18} aria-hidden /> Add
-                    </button>
-                  )}
                 </div>
               </li>
             );
@@ -232,10 +232,20 @@ export function ConfigSheet({ game, ex, item, okLabel, onClose }: { game: Game; 
       <div className="stack" style={{ gap: 6 }}>
         <span className="tiny">Target per set</span>
         <MeasureInputs ms={ms} beat={beat} v={toInputs(target, k)} onChange={(v) => setTarget(fromInputs(v, k))} />
-        {rec?.bestSet && <span className="small faint">Your best: {fmtValues(beat.kind === 'same' ? [beat.fixed, beat.beat] : ms, rec.bestSet)}. Leave 0 to aim for your record +1 each time.</span>}
+        {rec?.bestSet && !beatChanged && (
+          <span className="small muted">
+            Your best: {fmtValues(beat.kind === 'same' ? [beat.fixed, beat.beat] : ms, rec.bestSet)}. {fmtTarget(ms, nextTarget(ex, rec, ms, p.goals ?? [], beat))} beats it.
+          </span>
+        )}
       </div>
       <div className="stack" style={{ gap: 6 }}>
         <span className="tiny">How to beat it</span>
+        {options.length === 1 ? (
+          <p className="small" role="note" aria-label="How to beat it">
+            <b>{options[0].label}</b>
+            <span className="muted"> · {ex.equipment.length === 0 && !ex.measures.includes('weight') ? 'bodyweight exercise: more reps or time is a record' : 'one better number, none worse'}</span>
+          </p>
+        ) : (
         <div className="seg" role="radiogroup" aria-label="How to beat it">
           {options.map((o) => (
             <button
@@ -252,6 +262,7 @@ export function ConfigSheet({ game, ex, item, okLabel, onClose }: { game: Game; 
             </button>
           ))}
         </div>
+        )}
         {beatChanged && <span className="small faint">Saved for {ex.name} everywhere when you tap {okLabel}; your records are checked again.</span>}
         {err && (
           <p className="small banner" role="alert">

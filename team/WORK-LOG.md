@@ -84,3 +84,10 @@
   - Also fixed: Starter seeding moved outside write locks; Starter plans after sync and wipe; "how to beat" copy and errors; one live region; focus into the editor; lost .pop/.bar.full; 44 px segments; named icon exports.
   - Re-review: pass.
 - Checks: typecheck clean; 110 unit tests (25 new); e2e 56/56; balance unchanged (L15 / 57); 27 screenshots at 412×915 in docs/screens/round5/.
+- Chief of Staff screenshot review (impeccable critique): not OK yet → fixed all 6.
+  - P1: compact plan editor, so the first exercise row and its + Add show without scrolling (e2e check); description behind "+ Description"; "N added · Review" summary bar; no duplicate header Save.
+  - P1: Home's Start opens a plan sheet; no plan-less start anywhere (e2e check).
+  - P2: one-option "How to beat it" as plain text; help line "Your best: 12 reps. 13 beats it."
+  - P2: Lucide minus/plus on steppers; Finish session neutral (one accent).
+  - P3: more bottom padding, plus a real-viewport screenshot (03b).
+  - Checks: unit 110, e2e 58/58.

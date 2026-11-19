@@ -32,6 +32,7 @@ export {
   KeyRound,
   Lightbulb,
   Lock,
+  Minus,
   Palette,
   Pause,
   Pencil,

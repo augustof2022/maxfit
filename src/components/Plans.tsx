@@ -11,7 +11,7 @@ import { fmtPlanItem, moveItem, PLAN_DESC_MAX, PLAN_NAME_MAX, planError, plansAt
 import { availableExercises } from '../core/rules';
 import type { Exercise, Location, Plan, PlanItem } from '../core/types';
 import { db } from '../data/db';
-import { deletePlan, duplicatePlan, importPlan, markPlanViewed, savePlan, type PlanDraft } from '../data/repo';
+import { deletePlan, duplicatePlan, importPlan, markPlanViewed, savePlan, startSession, type PlanDraft } from '../data/repo';
 import type { Game } from '../data/useGame';
 import { confirmAsk } from './Confirm';
 import { HistorySheet } from './ExerciseHistory';
@@ -201,12 +201,16 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
   const [locationId, setLocationId] = useState(draft.locationId);
   const [items, setItems] = useState<PlanItem[]>(draft.items);
   const [configuring, setConfiguring] = useState<number | null>(null);
+  const [showDesc, setShowDesc] = useState(!!draft.description);
+  // "In this plan" is a summary bar that opens the reorder / remove list (the list below is for adding).
+  const [review, setReview] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const loc = game.locations.find((l) => l.id === locationId) ?? null;
   const doableIds = new Set(availableExercises(d.unlocked, loc?.equipment ?? []).map((e) => e.id));
   const dirty = name !== draft.name || description !== draft.description || locationId !== draft.locationId || JSON.stringify(items) !== JSON.stringify(draft.items);
   const isNew = !draft.id;
+  const invalid = items.filter((i) => !doableIds.has(i.exerciseId)).length;
   const nameRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   // Focus moves into the page (its title), so a screen reader and the keyboard start here.
@@ -234,7 +238,10 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
       if (!finalName) nameRef.current?.focus();
       return;
     }
-    if (items.some((i) => !doableIds.has(i.exerciseId))) return setErr(`Some exercises cannot be done at ${loc?.name ?? 'this place'} (equipment or locked). Remove them first.`);
+    if (items.some((i) => !doableIds.has(i.exerciseId))) {
+      setReview(true);
+      return setErr(`Some exercises cannot be done at ${loc?.name ?? 'this place'} (equipment or locked). Remove them first.`);
+    }
     setBusy(true);
     try {
       onClose(await savePlan({ id: draft.id, name: finalName, description, locationId, items }));
@@ -255,39 +262,43 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
         <h1 ref={titleRef} tabIndex={-1}>
           {isNew ? 'New plan' : 'Edit plan'}
         </h1>
-        <button className="btn quiet" onClick={save} disabled={busy}>
-          Save
-        </button>
       </header>
-      <div className="page-body">
-        <section className="group" aria-label="Plan details">
-          <label className="field">
-            Name
-            <input ref={nameRef} className="input" value={name} maxLength={PLAN_NAME_MAX} placeholder="e.g. Push day" onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            Description (optional)
-            <textarea className="input" rows={2} value={description} maxLength={PLAN_DESC_MAX} placeholder="e.g. Chest and arms, 30 minutes" onChange={(e) => setDescription(e.target.value)} />
-          </label>
-          <div className="stack" style={{ gap: 6 }}>
-            <span className="tiny">Place</span>
-            <div className="chips" role="radiogroup" aria-label="Plan place">
+      {/* Compact top so the exercise list starts on the first screen (Chief of Staff review, round 5). */}
+      <div className="page-body editor-body">
+        <section className="editor-details" aria-label="Plan details">
+          <input ref={nameRef} className="input" value={name} maxLength={PLAN_NAME_MAX} placeholder="Plan name, e.g. Push day" aria-label="Plan name" onChange={(e) => setName(e.target.value)} />
+          {showDesc ? (
+            <textarea className="input" rows={2} value={description} maxLength={PLAN_DESC_MAX} placeholder="e.g. Chest and arms, 30 minutes" aria-label="Description" onChange={(e) => setDescription(e.target.value)} autoFocus={!description} />
+          ) : null}
+          <div className="row" style={{ gap: 'var(--s2)' }}>
+            <div className="chips grow" role="radiogroup" aria-label="Plan place">
               {game.locations.map((l) => (
                 <button key={l.id} role="radio" aria-checked={locationId === l.id} className={`chip ${locationId === l.id ? 'on' : ''}`} onClick={() => setLocationId(l.id)}>
                   <PlaceIcon kind={l.kind} /> {l.name}
                 </button>
               ))}
             </div>
+            {!showDesc && (
+              <button className="btn quiet" style={{ flex: 'none' }} onClick={() => setShowDesc(true)}>
+                <Plus size={16} aria-hidden /> Description
+              </button>
+            )}
           </div>
         </section>
 
-        <section className="group" aria-label="Exercises in this plan">
-          <div className="group-head">
-            <h2>In this plan ({items.length})</h2>
-          </div>
-          {items.length === 0 ? (
-            <p className="list empty">Nothing yet. Add exercises from the list below: tap + Add on each one you want.</p>
-          ) : (
+        <section className="editor-summary" aria-label="Exercises in this plan">
+          <button className="summary-bar" onClick={() => setReview(!review)} aria-expanded={review} disabled={items.length === 0}>
+            <span className="grow">
+              {items.length === 0 ? 'No exercises yet: tap + Add below' : `${items.length} added`}
+              {invalid > 0 && <span style={{ color: 'var(--bad)' }}> · {invalid} not doable here</span>}
+            </span>
+            {items.length > 0 && (
+              <span className="summary-act">
+                Review {review ? <ChevronUp size={18} aria-hidden /> : <ChevronDown size={18} aria-hidden />}
+              </span>
+            )}
+          </button>
+          {review && items.length > 0 && (
             <ol className="list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {items.map((it, i) => {
                 const ex = EXERCISE_BY_ID[it.exerciseId];
@@ -319,13 +330,10 @@ export function PlanEditor({ game, draft, onClose }: { game: Game; draft: PlanDr
               })}
             </ol>
           )}
-          {items.length > 0 && <span className="small faint">Tap an exercise to change its sets, target or how to beat it.</span>}
+          {review && items.length > 0 && <span className="small faint">Tap an exercise to change its sets, target or how to beat it.</span>}
         </section>
 
-        <section className="group" aria-label="Add exercises">
-          <div className="group-head">
-            <h2>Add exercises</h2>
-          </div>
+        <section aria-label="Add exercises">
           <ExercisePicker game={game} locationId={locationId} added={new Set(items.map((i) => i.exerciseId))} onAdd={(it) => setItems((c) => (c.some((x) => x.exerciseId === it.exerciseId) ? c : [...c, it]))} />
         </section>
       </div>
@@ -424,6 +432,65 @@ function ImportSheet({ game, to, onClose }: { game: Game; to: Location; onClose:
       )}
       <button className="btn secondary" onClick={() => onClose()}>
         Close
+      </button>
+    </Sheet>
+  );
+}
+
+/**
+ * Start a workout from Home (round 5, Chief of Staff: no workout without a plan). Lists the plans at the
+ * current place, last used first, each with Start. No plan-less start exists anywhere.
+ */
+export function StartPlanSheet({ game, onStarted, onTrain, onClose }: { game: Game; onStarted: () => void; onTrain: () => void; onClose: () => void }) {
+  const d = game.d!;
+  const loc = d.location;
+  const plans = plansAt(game.plans, loc?.id ?? null, game.planUsed);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const start = async (id: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await startSession(loc?.id ?? null, id);
+      onStarted();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet onClose={onClose}>
+      <h2>Start a plan{loc ? ` at ${loc.name}` : ''}</h2>
+      {plans.length === 0 ? (
+        <p className="muted">No plans here yet. Make one in Train: pick the exercises once, then just tap Start.</p>
+      ) : (
+        <div className="list">
+          {plans.map((p) => {
+            const used = game.planUsed.get(p.id);
+            return (
+              <div key={p.id} className="row-item">
+                <span className="meta">
+                  <b>{p.name}</b>
+                  <span className="small faint num">
+                    {p.items.length} {p.items.length === 1 ? 'exercise' : 'exercises'} · {used ? `last used ${fmtDay(used)}` : 'not used yet'}
+                  </span>
+                </span>
+                <button className="btn primary sm" onClick={() => void start(p.id)} disabled={busy} aria-label={`Start ${p.name}`}>
+                  <Play size={16} aria-hidden /> Start
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {err && (
+        <p className="small banner" role="alert">
+          {err}
+        </p>
+      )}
+      <button className="btn secondary" onClick={onTrain}>
+        {plans.length ? 'Change place or edit plans' : 'Go to Train'}
       </button>
     </Sheet>
   );
